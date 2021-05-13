@@ -16,7 +16,7 @@ from transformers import T5Tokenizer, T5Config, AutoTokenizer, AutoConfig
 from transformers import RobertaForSequenceClassification, RobertaConfig
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-import utils, QA_data_utils, NLI_data_utils
+import utils, QA_data_utils, NLI_data_utils, circa_data_utils
 from utils import str2bool
 
 from classes import Report
@@ -51,6 +51,13 @@ def load_data(args, data_name, tokenizer):
             prep_function = NLI_data_utils.get_tensors_for_T5_split
         elif 'bert' in args.task_pretrained_name:
             prep_function = NLI_data_utils.get_tensors_for_bert
+        extension = 'tsv'
+    if data_name == 'circa':
+        read_function = circa_data_utils.read_circa
+        if 't5' in args.task_pretrained_name:
+            prep_function = circa_data_utils.get_tensors_for_T5_split
+        elif 'bert' in args.task_pretrained_name:
+            raise Exception("Circa not configured for bert.")
         extension = 'tsv'
 
     train_examples = read_function(args,
