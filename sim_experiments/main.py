@@ -609,6 +609,8 @@ if __name__ == "__main__":
         device = torch.device("cuda") if args.gpu == -1 else torch.device(f'cuda:{args.gpu}')
         assert args.train_batch_size % n_gpu == 0, f"Train batch size will need to be allocated equally across {n_gpu} gpus, but {args.train_batch_size} cannot be"
         assert args.test_batch_size % n_gpu == 0, f"Eval batch size will need to be allocated equally across {n_gpu} gpus, but {args.dev_batch_size} cannot be"
+    elif args.gpu == -99:
+        device = torch.device("cpu")
     else:
         device = torch.device(f"cuda:{args.gpu}")
         torch.cuda.set_device(device)   
