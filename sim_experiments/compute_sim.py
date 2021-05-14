@@ -17,7 +17,11 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
     elif data == 'NLI':
         extension = 'tsv'
         sep = '\t'        
-        folder = 'data/e-SNLI-data'      
+        folder = 'data/e-SNLI-data'
+    elif data == 'circa':
+        extension = 'csv'
+        sep = ','
+        folder = 'data/circa'
     save_dir = os.path.join(args.base_dir, 'saved_models')
     cache_dir = os.path.join(args.base_dir, 'cached_models')
     pretrained_name = args.task_pretrained_name + '-' + model_size
