@@ -10,48 +10,34 @@ import numpy as np
 import pandas as pd
 import csv
 import tensorflow as tf
-from unidecode import unidecode
 from utils import removeNonAscii, isNaN
 
 
 class CircaExample(object):
     '''used for training models with circa data'''
     def __init__(self,
-                 id,
-                 context,
-                 question_x,
-                 canquestion_x,
-                 answer_y,
-                 judgements,
-                 goldstandard1,
-                 goldstandard2,
-                 model_output,
+                 hypothesis,
+                 premise,
+                 target,
+                 prediction,
                  explanation):
-        self.id = id
-        self.context = context
-        self.question_x = question_x
-        self.canquestion_x = canquestion_x
-        self.answer_y = answer_y
-        self.judgements = judgements.split("#")
-        self.goldstandard1 = goldstandard1
-        self.goldstandard2 = goldstandard2
-        self.model_output = model_output
+        self.hypothesis = hypothesis
+        self.premise = premise
+        self.target = target
+        self.prediction = prediction
         self.explanation = explanation
-            
+
     def __str__(self):
         return self.__repr__()
 
     def __repr__(self):
 
-        list_ = [f"question: {self.question_x}"] + \
-            [f"indirect answer: {self.answer_y}"] + \
-            [f"goldstandard1: {self.goldstandard1}"] + \
-            [f"goldstandard2: {self.goldstandard2}"] + \
-            [f"model_output: {self.model_output}"] + \
+        list_ = [f"hypothesis: {self.hypothesis}"] + \
+            [f"premise: {self.premise}"] + \
+            [f"target: {self.target}"] + \
+            [f"prediction: {self.prediction}"] + \
             [f"explanation: {self.explanation}"]
-
         return "\n".join(list_)
-
 
 
 def read_circa(files, context_type=None):
@@ -84,39 +70,22 @@ def read_circa(files, context_type=None):
     context_str = context_keyword_mapping.get(context_type, None)
 
     column_names = [
-        "id",
-        "context",
-        "question_x",
-        "canquestion_x",
-        "answer_y",
-        "judgements",
-        "goldstandard1",
-        "goldstandard2",
-        "model_output",
-        "explanation"
+     'hypothesis',
+     'premise',
+     'target',
+     'prediction',
+     'explanation'
     ]
 
     examples = []
 
     for filepath in files:
         with tf.io.gfile.GFile(filepath) as f:
-            tsv_reader = csv.DictReader(f, delimiter="\t", fieldnames=column_names)
+            tsv_reader = csv.DictReader(f, delimiter=",", fieldnames=column_names)
             next(tsv_reader)  # skip header row
 
             for line in tsv_reader:
-                for k, v in line.items():
-                    if "goldstandard" in k:
-                        line[k] = unidecode(v)  # strange apostrophe in text
-                    elif k == "judgments":
-                        line[k] = list(map(unidecode, v.split("#")))
-
-                line_id = np.array([int(line["id"])])
-                line["id"] = line_id
-
-                if (context_str is None) or (context_str in line["context"]):
-                    examples.append(CircaExample(line['id'], line['context'], line['question_x'], line['canquestion_x'], line['answer_y'],
-                                                 line['judgements'], line['goldstandard1'], line['goldstandard2'], line['model_output'],
-                                                 line['explanation']))
+                examples.append(CircaExample(line['hypothesis'], line['premise'], line['target'], line['prediction'], line['explanation']))
 
     return examples
 
@@ -151,11 +120,11 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
     for example_index, example in enumerate(examples):
 
         # per-question variables
-        question_str = example.question_x
-        answer_str = example.answer
+        question_str = example.hypothesis
+        answer_str = example.premise
         explanation_str = example.explanation
-        model_output_str = example.model_output
-        goldstandard1_str = example.goldstandard1
+        prediction = example.prediction
+        target = example.target
         if isNaN(explanation_str):
             print("got nan explanation")
             example.explanation = '__'
@@ -196,8 +165,8 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
         elif condition_on_explanations and multi_explanation:
             # make task_input_ids in answer loop below
             input_str = ""
-        task_answer_str = f"The answer is: {model_output_str}"
-        explanation_output_str = f"The answer is {model_output_str} because {explanation_str}" \
+        task_answer_str = f"The answer is: {prediction}"
+        explanation_output_str = f"The answer is {prediction} because {explanation_str}" \
                                     if multi_explanation \
                                     else \
                                  f"My commonsense tells me that {explanation_str}"
@@ -215,7 +184,7 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
         _truncate_seq_pair(_explanation_output_ids, [], max_seq_length)
         _truncate_seq_pair(explanation_only_ids, [], max_seq_length)
 
-        task_output_str = f"The answer is: {model_output_str}"
+        task_output_str = f"The answer is: {prediction}"
         _task_output_ids = tokenizer.encode(task_output_str, add_special_tokens = False)
         ids_padding = [input_padding_id] * (max_seq_length - len(_task_output_ids))
         labels_padding = [label_padding_id] * (max_seq_length - len(_task_output_ids))
@@ -224,12 +193,12 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
         task_output_ids_list.append(task_output_ids)
         task_output_labels_list.append(task_output_labels)
 
-        explanation_context_str = f"The answer is {model_output_str} because" \
+        explanation_context_str = f"The answer is {prediction} because" \
                                     if multi_explanation \
                                     else \
                                   f"My commonsense tells me that"
         explanation_context_ids = tokenizer.encode(explanation_context_str, add_special_tokens = False)
-        if model_output_str == goldstandard1_str:
+        if prediction == target:
             context_len = len(explanation_context_ids)
         explanation_context_ids += [input_padding_id] * (max_seq_length - len(explanation_context_ids))
         _truncate_seq_pair(explanation_context_ids, [], max_seq_length)
