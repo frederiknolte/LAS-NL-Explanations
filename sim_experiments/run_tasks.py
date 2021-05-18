@@ -230,22 +230,25 @@ def NLI_SIM_ST_rationalize(args):
 
 # --- BEGIN circa --- #
 
-def circa_CLM_reason_MT(args):
-    for seed in seed_variance_test:
-        os.system(f"python main.py --task_coef .5 --multi_explanation false --max_seq_len 600 "
-                  f"--model_name MT.RE --write_predictions --max_sample_len 360 "
-                  f"--data_dir data/circa --gpu {args.gpu} --seed {seed} --num_train_epochs 20 --warmup_proportion .1 "
-                  f"--train_batch_size {args.train_batch_size} --grad_accumulation_factor {args.grad_accumulation_factor} {small_data_addin} "
-                  f"--save_dir {save_dir} --cache_dir {cache_dir} "
-        )
-
-def circa_SIM_CLM_reason_MT(args):
+def circa_QA_SIM_CLM_reason_MT(args):
     for seed in seed_variance_test:
         os.system(f"python main.py --task_pretrained_name t5-base --do_explain false --multi_explanation false --condition_on_explanations true "
-                  f"--explanations_to_use default --labels_to_use preds_circa_t5-base_MT.RE_seed{seed} --max_seq_len 600 --max_sample_len 360 "
+                  f"--explanations_to_use explanation --labels_to_use prediction --max_seq_len 600 --max_sample_len 360 "
                   f"--model_name sim.MT.RE --input_dropout .2 --explanation_dropout .4  "
-                  f"--data_dir data/circa --gpu {args.gpu} --seed {seed} "
+                  f"--data_dir data/circa/QA --gpu {args.gpu} --seed {seed} "
                   f"--train_batch_size {args.train_batch_size} --grad_accumulation_factor {args.grad_accumulation_factor} --warmup_proportion .01 --num_train_epochs 15 "
+                  f"--save_dir {save_dir} --cache_dir {cache_dir} {small_data_addin}"
+        )
+
+
+def circa_NLI_SIM_ST_reason(args):
+    LR = 1e-4 if 't5' in args.model else 1e-5
+    for seed in seed_variance_test:
+        os.system(f"python main.py --task_pretrained_name {args.model} --do_explain false --multi_explanation false --condition_on_explanations "
+                  f"true --explanations_to_use explanation --labels_to_use prediction "
+                  f"--model_name sim.ST.RE  --input_dropout .2 --explanation_dropout .4 --lr {LR} "
+                  f"--data_dir data/circa/NLI --gpu {args.gpu} --seed {seed}  "
+                  f"--train_batch_size {args.train_batch_size} --grad_accumulation_factor {args.grad_accumulation_factor}  --warmup_proportion .01 --num_train_epochs 15 "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} {small_data_addin}"
         )
 
@@ -355,8 +358,8 @@ if __name__ == '__main__':
 
     # --- begin circa --- #
 
-    if args.experiment == 'circa.MT.RE':
-        circa_CLM_reason_MT(args)
+    if args.experiment == 'circa.QA.SIM.MT.RE':
+        circa_QA_SIM_CLM_reason_MT(args)
 
-    if args.experiment == 'circa.SIM.MT.RE':
-        circa_SIM_CLM_reason_MT(args)
+    if args.experiment == 'circa.NLI.SIM.ST.RE':
+        circa_NLI_SIM_ST_reason(args)
