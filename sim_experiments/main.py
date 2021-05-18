@@ -57,8 +57,8 @@ def load_data(args, data_name, tokenizer):
         if 't5' in args.task_pretrained_name:
             prep_function = circa_data_utils.get_tensors_for_T5_split
         elif 'bert' in args.task_pretrained_name:
-            raise Exception("Circa not configured for bert.")
-        extension = 'tsv'
+            prep_function = circa_data_utils.get_tensors_for_bert
+        extension = 'csv'
 
     train_examples = read_function(args,
                             input_file = os.path.join(args.data_dir, 'train.%s' % extension), 
@@ -198,7 +198,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
 
         # shape vars
         batch_size = task_output_ids.size(0)
-        num_choices = 3
+        num_choices = 1  # TODO are you kidding me why is this hard coded somewhere in the middle of a 900 line-file?! This took me hours to figure out ._.
 
         # randomly dropping out explanations
         if args.explanation_dropout > 0 and allow_dropout:
@@ -254,7 +254,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 if 't5' in args.task_pretrained_name and not ST_RA:
                     outputs = model(input_ids = task_input_ids, 
                                 attention_mask = task_input_masks)
-                    encoder_hidden_states = outputs[1]  
+                    encoder_hidden_states = outputs[1]
                     outputs = model(encoder_hidden_states = encoder_hidden_states, 
                                     encoder_attention_mask = task_input_masks,
                                     decoder_input_ids = task_answer_ids, 
@@ -266,7 +266,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     with torch.no_grad():
                         # add num_choices dim to input_masks and encoder_hidden_states and expand to match task_output_ids shape
                         expand_shape = list(encoder_hidden_states.shape)
-                        expand_shape.insert(1, num_choices)    
+                        expand_shape.insert(1, num_choices)
                         encoder_hidden_states = encoder_hidden_states.unsqueeze(1).expand(expand_shape)
                         task_input_masks = task_input_masks.unsqueeze(1).expand_as(task_output_masks)
 
@@ -458,6 +458,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
             explanation_loss_mean = explanation_loss_sum / n_batches        
             stats.update({f'{split_name}_exp_loss' : explanation_loss_mean})
         if sample_exps:
+            print(f"compute bleu: split_name={split_name}, len(sample_strs)={len(sample_strs)}")
             bleu = utils.computeBLEU(sample_strs, [[x] for x in label_strs]) if len(sample_strs) > 0 else -1
             stats.update({f'{split_name}_bleu' : bleu})
     stats_dict.update(stats)
@@ -532,7 +533,7 @@ if __name__ == "__main__":
     parser.add_argument('--grad_accumulation_factor', type=int, default=3, help="Number of updates steps to accumulate before performing a backward pass and step.")
     parser.add_argument("--dev_batch_size", default=20, type=int, help="Total batch size for eval.")
     parser.add_argument("--lr", default=1e-4, type=float, help="The initial learning rate for Adam.")
-    parser.add_argument("--num_train_epochs", default=20, type=int, help="Total number of training epochs to perform.")    
+    parser.add_argument("--num_train_epochs", default=20, type=int, help="Total number of training epochs to perform.")
     parser.add_argument("--warmup_proportion", default=0.01, type=float, help="Proportion of training to perform linear learning rate warmup for. "
                                                                             "E.g., 0.1 = 10%% of training.")
     parser.add_argument('--max_grad_norm', type=int, default=1)
@@ -620,7 +621,9 @@ if __name__ == "__main__":
         torch.cuda.manual_seed_all(args.seed)
 
     # local variables
-    if '1.0' in args.data_dir or 'qa' in args.model_name:
+    if 'circa' in args.data_dir:
+        data_name = 'circa'
+    elif '1.0' in args.data_dir or 'qa' in args.model_name:
         data_name = 'QA'
     elif 'NLI' in args.data_dir or 'nli' in args.model_name:
         data_name = 'NLI'
@@ -635,6 +638,11 @@ if __name__ == "__main__":
         save_name = f"{data_name}_{agent_insert}{args.task_pretrained_name}_{args.model_name}_seed{args.seed}{agent_epoch}"
 
     elif data_name == 'NLI':
+        agent_insert = '2-agent-task_' if args.save_agent else ''
+        agent_epoch = f'_epoch{args.load_epoch}' if args.save_agent else ''
+        save_name = f"{data_name}_{agent_insert}{args.task_pretrained_name}_{args.model_name}_seed{args.seed}{agent_epoch}"
+
+    elif data_name == 'circa':
         agent_insert = '2-agent-task_' if args.save_agent else ''
         agent_epoch = f'_epoch{args.load_epoch}' if args.save_agent else ''
         save_name = f"{data_name}_{agent_insert}{args.task_pretrained_name}_{args.model_name}_seed{args.seed}{agent_epoch}"

@@ -9,7 +9,6 @@ import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import csv
-import tensorflow as tf
 from utils import removeNonAscii, isNaN
 
 
@@ -40,7 +39,7 @@ class CircaExample(object):
         return "\n".join(list_)
 
 
-def read_circa(files, context_type=None):
+def read_circa(args, input_file, explanations_to_use, labels_to_use, version):
     """Yields all examples if context_type is None,
             or examples per context:
             1. X wants to know about Y's food preferences
@@ -55,20 +54,6 @@ def read_circa(files, context_type=None):
             10. Y has just told X that he/she is considering switching his/her job.
             """
 
-    context_keyword_mapping = {
-        1: "food preference",
-        2: "during weekends",
-        3: "sorts of books",
-        4: "new neighbour",
-        5: "on a Friday",
-        6: "music preferences",
-        7: "different city",
-        8: "childhood neighbours",
-        9: "buying a flat",
-        10: "switching",
-    }
-    context_str = context_keyword_mapping.get(context_type, None)
-
     column_names = [
      'hypothesis',
      'premise',
@@ -79,15 +64,95 @@ def read_circa(files, context_type=None):
 
     examples = []
 
-    for filepath in files:
-        with tf.io.gfile.GFile(filepath) as f:
-            tsv_reader = csv.DictReader(f, delimiter=",", fieldnames=column_names)
-            next(tsv_reader)  # skip header row
+    data = pd.read_csv(input_file, sep=',')
 
-            for line in tsv_reader:
-                examples.append(CircaExample(line['hypothesis'], line['premise'], line['target'], line['prediction'], line['explanation']))
+    for i, line in data.iterrows():
+        examples.append(CircaExample(line['hypothesis'], line['premise'], line['target'], line['prediction'], line['explanation']))
 
     return examples
+
+
+# TODO not implemented
+def get_tensors_for_bert(args, examples, tokenizer, max_seq_length: int, condition_on_explanations: bool, multi_explanation: bool,
+                         spliced_explanation_len=None, explanations_only=False):
+    """
+    Converts a list of examples into features for use with T5.
+    ref_answer -- reference the answer in the explanation output ids, or the distractor if False
+    Returns: list of tensors
+    """
+    raise NotImplementedError()
+
+    input_padding_id = tokenizer.pad_token_id
+    label_padding_id = -100
+    eos_token_id = tokenizer.eos_token_id
+    explanation_prefix_ids = tokenizer.encode("explain:", add_special_tokens=False)
+    return_data = []
+    start = time.time()
+    for example_index, example in enumerate(examples):
+        if example_index > args.small_size and args.small_data:
+            break
+        # per-question variables
+        premise = example.premise
+        hypothesis = example.hypothesis
+        choice_label = example.label
+        answer_str = example.choices[choice_label]
+        explanation_str = example.explanation
+        task_input_ids_list = []
+        # first screen for length. want to keep input formatting as is due to tokenization differences with spacing before words (rather than adding all the ids)
+        input_str = f"{tokenizer.cls_token} {premise} {tokenizer.sep_token} {hypothesis} {tokenizer.sep_token}"
+        if spliced_explanation_len is not None:
+            cap_length = max_seq_length - spliced_explanation_len
+        else:
+            cap_length = max_seq_length
+
+        if explanations_only:
+            premise = ""
+            hypothesis = ""
+
+        init_input_ids = tokenizer.encode(input_str)
+        if len(init_input_ids) > (cap_length):
+            over_by = len(init_input_ids) - cap_length
+            premise_tokens = tokenizer.encode(premise)
+            keep_up_to = len(premise_tokens) - over_by - 2  # leaves buffer
+            new_premise_tokens = premise_tokens[:keep_up_to]
+            premise = tokenizer.decode(new_premise_tokens) + '.'
+
+        # get string formats
+        input_str = f"{tokenizer.cls_token} {premise} {tokenizer.sep_token} {hypothesis} {tokenizer.sep_token}"
+        if condition_on_explanations:
+            input_str += f" My commonsense tells me {explanation_str} {tokenizer.sep_token}"
+
+        explanation_context_str = f"My commonsense tells me that"
+        explanation_context_ids = tokenizer.encode(explanation_context_str, add_special_tokens=False)
+        explanation_only_ids = tokenizer.encode(example.explanation, add_special_tokens=False)
+        explanation_len = len(explanation_context_ids) + len(explanation_only_ids)
+
+        # get token_ids
+        _input_ids = tokenizer.encode(input_str, add_special_tokens=False)
+        task_input_ids = _input_ids
+
+        # truncate to fit in max_seq_length
+        _truncate_seq_pair(task_input_ids, [], max_seq_length)
+
+        # pad up to the max sequence len. NOTE input_padding_id goes on inputs to either the encoder or decoder. label_padding_id goes on lm_labels for decode
+        padding = [input_padding_id] * (max_seq_length - len(task_input_ids))
+        task_input_ids += padding
+
+        # make into tensors and accumulate
+        task_input_ids = torch.tensor(task_input_ids if len(task_input_ids_list) < 1 else task_input_ids_list, dtype=torch.long)
+        task_input_masks = (task_input_ids != input_padding_id).float()
+        task_choice_label = torch.tensor(choice_label, dtype=torch.long)
+        explanation_len = torch.tensor(explanation_len).long()
+        # cross-compatability with number of items in t5_split below...
+        data_point = [task_input_ids, task_input_masks, task_input_ids, task_input_ids, task_input_ids, task_input_ids, task_input_ids,
+                      task_input_ids, task_choice_label]
+        data_point += [task_choice_label] * 7 + [explanation_len]
+        return_data.append(data_point)
+    print("loading data took %.2f seconds" % (time.time() - start))
+    # now reshape list of lists of tensors to list of tensors
+    n_cols = len(return_data[0])
+    return_data = [torch.stack([data_point[j] for data_point in return_data], dim=0) for j in range(n_cols)]
+    return return_data
 
 
 def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, condition_on_explanations : bool, multi_explanation : bool,
@@ -109,6 +174,7 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
     Returns: list of tensors
         
     """
+
     input_padding_id = tokenizer.pad_token_id   
     label_padding_id = -100
     eos_token_id = tokenizer.eos_token_id
@@ -128,7 +194,7 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
         if isNaN(explanation_str):
             print("got nan explanation")
             example.explanation = '__'
-        choice_label = example.label
+        choice_label = 0  # example.label
         task_input_ids_list = []
         task_output_ids_list = []
         task_output_labels_list = []
@@ -167,7 +233,7 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
             input_str = ""
         task_answer_str = f"The answer is: {prediction}"
         explanation_output_str = f"The answer is {prediction} because {explanation_str}" \
-                                    if multi_explanation \
+                                 if multi_explanation \
                                     else \
                                  f"My commonsense tells me that {explanation_str}"
 
@@ -184,6 +250,13 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
         _truncate_seq_pair(_explanation_output_ids, [], max_seq_length)
         _truncate_seq_pair(explanation_only_ids, [], max_seq_length)
 
+        task_input_str = f"[CLS] {question_str} {answer_str} [SEP] The answer is {prediction} because {explanation_str}"
+        task_input_ids = task_prefix_ids + tokenizer.encode(task_input_str, add_special_tokens=False)
+        _truncate_seq_pair(task_input_ids, [], max_seq_length)
+        ids_padding = [input_padding_id] * (max_seq_length - len(task_input_ids))
+        task_input_ids += ids_padding
+        task_input_ids_list.append(task_input_ids)
+
         task_output_str = f"The answer is: {prediction}"
         _task_output_ids = tokenizer.encode(task_output_str, add_special_tokens = False)
         ids_padding = [input_padding_id] * (max_seq_length - len(_task_output_ids))
@@ -198,8 +271,8 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
                                     else \
                                   f"My commonsense tells me that"
         explanation_context_ids = tokenizer.encode(explanation_context_str, add_special_tokens = False)
-        if prediction == target:
-            context_len = len(explanation_context_ids)
+        # if prediction == target:
+        context_len = len(explanation_context_ids)  # removed indentation
         explanation_context_ids += [input_padding_id] * (max_seq_length - len(explanation_context_ids))
         _truncate_seq_pair(explanation_context_ids, [], max_seq_length)
         explanation_context_ids_list.append(explanation_context_ids)
@@ -224,10 +297,10 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
         labels_padding = [label_padding_id] * (max_seq_length - len(_explanation_output_ids))
         explanation_output_ids = _explanation_output_ids + ids_padding
         explanation_output_labels = _explanation_output_ids + labels_padding
-        explanation_output_labels[:context_len] = [label_padding_id]*context_len # no LM loss on the explanation_context_str 
+        explanation_output_labels[:context_len] = [label_padding_id]*context_len # no LM loss on the explanation_context_str
         
         # make into tensors and accumulate
-        task_input_ids = torch.tensor(task_input_ids if len(task_input_ids_list) < 1 else task_input_ids_list, dtype = torch.long)
+        task_input_ids = torch.tensor(task_input_ids if len(task_input_ids_list) <= 1 else task_input_ids_list, dtype = torch.long)
         task_input_masks = (task_input_ids!=input_padding_id).float()
         task_answer_ids = torch.tensor(task_answer_ids, dtype = torch.long)
         task_answer_masks = (task_answer_ids!=input_padding_id).float()
@@ -251,6 +324,8 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
                       explanation_input_ids, explanation_input_masks,
                       explanation_output_ids, explanation_output_masks, explanation_output_labels,
                       explanation_context_ids, explanation_only_ids, explanation_len]
+        # for i in range(len(data_point)):
+        #     print(f"item {i}, shape: {data_point[i].shape if type(data_point[i])!=bool else None}")
         return_data.append(data_point)
 
     # now reshape list of lists of tensors to list of tensors
