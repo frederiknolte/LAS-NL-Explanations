@@ -57,7 +57,7 @@ def read_CQA(args, input_file, explanations_to_use, version,
     df = pd.read_csv(input_file)
     df = df.applymap(removeNonAscii)
     n = len(df) if not args.small_data else args.small_size
-    num_choices = 3 if version == '1.0' else 5
+    num_choices = 3 if version == '1.0' else (6 if 'circa' in input_file else 5)
     multi_exp = (args.condition_on_explanations and 'multi' in explanations_to_use and args.multi_explanation)
     # simulate_rationalized is used to pull out the predicted explanation when simulating a CAGE-Ra model
     simulate_rationalized = (args.condition_on_explanations and not args.multi_explanation and 'st.ra' in (labels_to_use.lower() if isinstance(labels_to_use, str) else '' ))
@@ -66,7 +66,7 @@ def read_CQA(args, input_file, explanations_to_use, version,
     if 'test' in input_file and (explanations_to_use == 'ground_truth' or explanations_to_use == 'oracle'):
         explanations_to_use = 'None'
 
-    ids = df['id']
+    ids = range(n) if 'circa' in input_file else df['id']
     questions = df['question']
     choice_cols = [f'choice_{i}' for i in range(num_choices)]
     choices = df[choice_cols]    

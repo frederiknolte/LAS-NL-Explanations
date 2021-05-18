@@ -107,6 +107,45 @@ def read_NLI(args, input_file, explanations_to_use, version,
 
     return examples
 
+
+def read_NLI_circa(args, input_file, explanations_to_use, version,
+            labels_to_use = 'label', filter_explanations = None):
+
+    label_map = {0: "neutral", 1: "entailment", 2: "contradiction", 3: "none"}
+    exp_cols = ['explanation']
+    df = pd.read_csv(input_file, delimiter = ',')
+    n = len(df) if not args.small_data else args.small_size
+    # simulate_rationalized is used to pull out the predicted explanation when simulating a ST-Ra model
+    simulate_rationalized = (args.condition_on_explanations and not args.multi_explanation and 'st.ra' in (labels_to_use.lower() if isinstance(labels_to_use, str) else '' ))
+    ids = range(n)
+    premises = df['premise']
+    hypotheses = df['hypothesis']
+    print("using labels: %s" % labels_to_use)
+    labels = df[labels_to_use]
+
+    if explanations_to_use == 'None':
+        explanations = [''] * n
+    else:
+        exp_cols = explanations_to_use
+        explanations = df[exp_cols]
+        print(f"getting explanations from {explanations_to_use}")
+
+    # pick out the predicted explanations, according to the task model's prediction
+    if simulate_rationalized:
+        print("picking out predicted explanation")
+        explanations = [explanations.loc[i,exp_cols[label]] for i, label in enumerate(labels)]
+
+    examples = [NLIExample(idx = ids[i],
+                        premise = premises[i],
+                        hypothesis = hypotheses[i],
+                        explanation = explanations[i],
+                        choices = [v for v in label_map.values()],
+                        label = labels[i])
+               for i in range(n)]
+
+    return examples
+
+
 def get_tensors_for_bert(args, examples, tokenizer, max_seq_length : int, condition_on_explanations : bool, multi_explanation : bool,
                             spliced_explanation_len = None, explanations_only = False):
     """
@@ -210,7 +249,10 @@ def get_tensors_for_T5_split(args, examples, tokenizer, max_seq_length : int, co
         premise = example.premise
         hypothesis = example.hypothesis        
         choice_label = example.label
-        answer_str = example.choices[choice_label]        
+        try:
+            answer_str = example.choices[choice_label]
+        except:
+            print(choice_label)
         explanation_str = example.explanation
         if isNaN(explanation_str):
             print("got nan explanation")
