@@ -16,7 +16,7 @@ from transformers import T5Tokenizer, T5Config, AutoTokenizer, AutoConfig
 from transformers import RobertaForSequenceClassification, RobertaConfig
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-import utils, QA_data_utils, NLI_data_utils, circa_data_utils
+import utils, QA_data_utils, NLI_data_utils, circa_QA_data_utils
 from utils import str2bool
 
 from classes import Report
@@ -36,7 +36,7 @@ def load_data(args, data_name, tokenizer):
     returns pytorch dataloaders for train and eval data
     '''
     filter_explanations = None
-    version = '1.0' #if '1.0' in args.data_dir else '1.1'
+    version = '1.0' if '1.0' in args.data_dir else '1.1'
 
     if data_name == 'QA':
         read_function = QA_data_utils.read_CQA
@@ -52,12 +52,12 @@ def load_data(args, data_name, tokenizer):
         elif 'bert' in args.task_pretrained_name:
             prep_function = NLI_data_utils.get_tensors_for_bert
         extension = 'tsv'
-    if data_name == 'circa':
-        read_function = circa_data_utils.read_circa
+    if data_name == 'circa_NLI':
+        read_function = NLI_data_utils.read_NLI_circa
         if 't5' in args.task_pretrained_name:
-            prep_function = circa_data_utils.get_tensors_for_T5_split
+            prep_function = NLI_data_utils.get_tensors_for_T5_split
         elif 'bert' in args.task_pretrained_name:
-            prep_function = circa_data_utils.get_tensors_for_bert
+            prep_function = NLI_data_utils.get_tensors_for_bert
         extension = 'csv'
 
     train_examples = read_function(args,
@@ -621,8 +621,10 @@ if __name__ == "__main__":
         torch.cuda.manual_seed_all(args.seed)
 
     # local variables
-    if 'circa' in args.data_dir:
-        data_name = 'circa'
+    if 'circa/QA' in args.data_dir:
+        data_name = 'QA'
+    elif 'circa/NLI' in args.data_dir:
+        data_name = 'circa_NLI'
     elif '1.0' in args.data_dir or 'qa' in args.model_name:
         data_name = 'QA'
     elif 'NLI' in args.data_dir or 'nli' in args.model_name:
@@ -637,12 +639,7 @@ if __name__ == "__main__":
         agent_epoch = f'_epoch{args.load_epoch}' if args.save_agent else ''
         save_name = f"{data_name}_{agent_insert}{args.task_pretrained_name}_{args.model_name}_seed{args.seed}{agent_epoch}"
 
-    elif data_name == 'NLI':
-        agent_insert = '2-agent-task_' if args.save_agent else ''
-        agent_epoch = f'_epoch{args.load_epoch}' if args.save_agent else ''
-        save_name = f"{data_name}_{agent_insert}{args.task_pretrained_name}_{args.model_name}_seed{args.seed}{agent_epoch}"
-
-    elif data_name == 'circa':
+    elif data_name == 'NLI' or data_name == 'circa_NLI':
         agent_insert = '2-agent-task_' if args.save_agent else ''
         agent_epoch = f'_epoch{args.load_epoch}' if args.save_agent else ''
         save_name = f"{data_name}_{agent_insert}{args.task_pretrained_name}_{args.model_name}_seed{args.seed}{agent_epoch}"
