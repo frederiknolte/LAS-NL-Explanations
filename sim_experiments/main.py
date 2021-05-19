@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch_xla
+import torch_xla.core.xla_model as xm
 
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
@@ -545,7 +547,8 @@ if __name__ == "__main__":
     parser.add_argument("--task_coef", default=1, type=float, help="Coefficient for task loss.")
     parser.add_argument('--max_sample_len', type = int, default = 175, help = 'Maximum num tokens that can appear in generated explanation')    
     # gpu + distributed + half-precision training
-    parser.add_argument('--gpu', type = int, default = -1, help = 'gpu id to use. -1 defaults to multi-gpu')
+    parser.add_argument('--gpu', type = int, default = None, help = 'gpu id to use. -1 corresponds to multi-gpu')
+    parser.add_argument('--use_tpu', action='store_true', help='use tpu.')
     parser.add_argument('--fp16', default=False, type=str2bool, help="Whether to use 16-bit float precision instead of 32-bit")
     parser.add_argument('--fp16_opt_level',
                         type=str, default='O1',
@@ -615,11 +618,14 @@ if __name__ == "__main__":
         device = torch.device("cuda") if args.gpu == -1 else torch.device(f'cuda:{args.gpu}')
         assert args.train_batch_size % n_gpu == 0, f"Train batch size will need to be allocated equally across {n_gpu} gpus, but {args.train_batch_size} cannot be"
         assert args.test_batch_size % n_gpu == 0, f"Eval batch size will need to be allocated equally across {n_gpu} gpus, but {args.dev_batch_size} cannot be"
-    elif args.gpu == -99:
-        device = torch.device("cpu")
-    else:
+    elif args.gpu is not None:
         device = torch.device(f"cuda:{args.gpu}")
-        torch.cuda.set_device(device)   
+        torch.cuda.set_device(device)
+    elif args.use_tpu:
+        device = xm.xla_device()
+        torch.cuda.set_device(device)
+    else:
+        device = torch.device("cpu")
     np.random.seed(args.seed)
     torch.random.manual_seed(args.seed)
     if multi_gpu:
