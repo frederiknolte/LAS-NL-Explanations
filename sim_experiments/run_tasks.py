@@ -235,7 +235,9 @@ def circa_QA_SIM_CLM_reason_MT(args):
         os.system(f"python main.py --task_pretrained_name t5-base --do_explain false --multi_explanation false --condition_on_explanations true "
                   f"--explanations_to_use explanation --labels_to_use prediction --max_seq_len 600 --max_sample_len 360 "
                   f"--model_name sim.MT.RE --input_dropout .2 --explanation_dropout .4  "
-                  f"--data_dir data/circa/QA --gpu {args.gpu} --seed {seed} "
+                  f"--data_dir data/circa/QA --seed {seed} "
+                  f"{('--gpu '+str(args.gpu)) if args.gpu is not None else ''}"
+                  f"{('--use_tpu ' if args.use_tpu else '')}"
                   f"--train_batch_size {args.train_batch_size} --grad_accumulation_factor {args.grad_accumulation_factor} --warmup_proportion .01 --num_train_epochs 15 "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} {small_data_addin}"
         )
@@ -247,14 +249,17 @@ def circa_NLI_SIM_ST_reason(args):
         os.system(f"python main.py --task_pretrained_name {args.model} --do_explain false --multi_explanation false --condition_on_explanations "
                   f"true --explanations_to_use explanation --labels_to_use prediction "
                   f"--model_name sim.ST.RE  --input_dropout .2 --explanation_dropout .4 --lr {LR} "
-                  f"--data_dir data/circa/NLI --gpu {args.gpu} --seed {seed}  "
+                  f"--data_dir data/circa/NLI --seed {seed} "
+                  f"{('--gpu '+str(args.gpu)) if args.gpu is not None else ''}"
+                  f"{('--use_tpu ' if args.use_tpu else '')}"
                   f"--train_batch_size {args.train_batch_size} --grad_accumulation_factor {args.grad_accumulation_factor}  --warmup_proportion .01 --num_train_epochs 15 "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} {small_data_addin}"
         )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--gpu", default=0, type=int, help='')    
+    parser.add_argument("--gpu", default=None, type=int, help='')
+    parser.add_argument('--use_tpu', action='store_true', help='use tpu for training.')
     parser.add_argument("--experiment", '-e', type=str, help='')
     parser.add_argument("--server_number", '-s', required=True, type=str, help='')
     parser.add_argument("--model", default='t5-base', type=str, help='HuggingFace transformer model')
