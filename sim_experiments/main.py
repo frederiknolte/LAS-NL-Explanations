@@ -90,9 +90,9 @@ def load_data(args, data_name, tokenizer):
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
     train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=True, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 4, pin_memory = True)
+                num_workers = 2, pin_memory = True)
     sequential_train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=False, batch_size=args.dev_batch_size, 
-                num_workers = 4, pin_memory = True)
+                num_workers = 2, pin_memory = True)
     
     dev_tensors = prep_function(args, examples = dev_examples, 
                                             tokenizer = tokenizer, 
@@ -101,7 +101,7 @@ def load_data(args, data_name, tokenizer):
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
     dev_dataloader = DataLoader(TensorDataset(*dev_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 4, pin_memory = True)
+                num_workers = 2, pin_memory = True)
     
     test_tensors = prep_function(args, examples = test_examples, 
                                             tokenizer = tokenizer, 
@@ -110,7 +110,7 @@ def load_data(args, data_name, tokenizer):
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
     test_dataloader = DataLoader(TensorDataset(*test_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 4, pin_memory = True)
+                num_workers = 2, pin_memory = True)
     
     return train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader
 
