@@ -198,7 +198,12 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
 
         # shape vars
         batch_size = task_output_ids.size(0)
-        num_choices = 1  # TODO are you kidding me why is this hard coded somewhere in the middle of a 900 line-file?! This took me hours to figure out ._.
+        if 'circa/NLI' in args.data_dir:
+            num_choices = 4
+        elif 'circa/QA' in args.data_dir:
+            num_choices = 6
+        else:
+            num_choices = 3  # TODO are you kidding me why is this hard coded somewhere in the middle of a 900 line-file?!
 
         # randomly dropping out explanations
         if args.explanation_dropout > 0 and allow_dropout:
