@@ -16,7 +16,7 @@ from transformers import T5Tokenizer, T5Config, AutoTokenizer, AutoConfig
 from transformers import RobertaForSequenceClassification, RobertaConfig
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-import utils, QA_data_utils, NLI_data_utils, circa_QA_data_utils
+import utils, QA_data_utils, NLI_data_utils
 from utils import str2bool
 
 from classes import Report
