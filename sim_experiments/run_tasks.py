@@ -233,7 +233,7 @@ def NLI_SIM_ST_rationalize(args):
 def circa_QA_SIM_CLM_reason_MT(args):
     for seed in seed_variance_test:
         os.system(f"python main.py --task_pretrained_name t5-base --do_explain false --multi_explanation false --condition_on_explanations true "
-                  f"--explanations_to_use explanation --labels_to_use prediction --max_seq_len 600 --max_sample_len 360 "
+                  f"--explanations_to_use explanation --labels_to_use prediction --max_seq_len 650 --max_sample_len 360 "
                   f"--model_name sim.MT.RE --input_dropout .2 --explanation_dropout .4  "
                   f"--data_dir data/circa/QA --seed {seed} "
                   f"{('--gpu '+str(args.gpu)) if args.gpu is not None else ''}"
@@ -247,7 +247,7 @@ def circa_NLI_SIM_ST_reason(args):
     LR = 1e-4 if 't5' in args.model else 1e-5
     for seed in seed_variance_test:
         os.system(f"python main.py --task_pretrained_name {args.model} --do_explain false --multi_explanation false --condition_on_explanations "
-                  f"true --explanations_to_use explanation --labels_to_use prediction "
+                  f"true --explanations_to_use explanation --labels_to_use prediction --max_seq_len 650 --max_sample_len 360 "
                   f"--model_name sim.ST.RE  --input_dropout .2 --explanation_dropout .4 --lr {LR} "
                   f"--data_dir data/circa/NLI --seed {seed} "
                   f"{('--gpu '+str(args.gpu)) if args.gpu is not None else ''}"
