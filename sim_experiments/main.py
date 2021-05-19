@@ -7,8 +7,11 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-import torch_xla
-import torch_xla.core.xla_model as xm
+try:
+    import torch_xla
+    import torch_xla.core.xla_model as xm
+except:
+    print("Not loading torch-xla\n")
 
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
@@ -424,6 +427,9 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 if args.do_task: del task_loss
                 if args.do_explain: del explanation_loss
                 del batch, outputs
+
+        elapsed_time = (time.time() - start_time) / 60
+        print(f"Elapsed time: {elapsed_time:1.2f} minutes")
                 
     # print examples
     if args.print_examples:
@@ -471,7 +477,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     stats_dict.update(stats)
 
     run_time = (time.time() - start_time) / 60
-    print(f"\n  {split_name.capitalize()} time: {run_time:1.2f} minutes")
+    print(f"\n  {split_name.capitalize()} total time: {run_time:1.2f} minutes")
 
     if write_predictions:
         extension = 'tsv' if 'NLI' in args.data_dir else 'csv'
