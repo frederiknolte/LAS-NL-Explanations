@@ -626,7 +626,6 @@ if __name__ == "__main__":
     elif args.use_tpu:
         print("Using TPU")
         device = xm.xla_device()
-        torch.cuda.set_device(device)
     else:
         print("Using CPU")
         device = torch.device("cpu")
