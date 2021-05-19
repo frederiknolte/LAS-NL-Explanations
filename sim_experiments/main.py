@@ -614,17 +614,21 @@ if __name__ == "__main__":
     # GPU + SEED set-up
     n_gpu = torch.cuda.device_count()
     multi_gpu = (n_gpu > 1 and args.gpu == -1) # i.e. multiple gpus available and gpu choice not specified
-    if multi_gpu: 
+    if multi_gpu:
+        print("Using multi-GPU")
         device = torch.device("cuda") if args.gpu == -1 else torch.device(f'cuda:{args.gpu}')
         assert args.train_batch_size % n_gpu == 0, f"Train batch size will need to be allocated equally across {n_gpu} gpus, but {args.train_batch_size} cannot be"
         assert args.test_batch_size % n_gpu == 0, f"Eval batch size will need to be allocated equally across {n_gpu} gpus, but {args.dev_batch_size} cannot be"
     elif args.gpu is not None:
+        print("Using single GPU")
         device = torch.device(f"cuda:{args.gpu}")
         torch.cuda.set_device(device)
     elif args.use_tpu:
+        print("Using TPU")
         device = xm.xla_device()
         torch.cuda.set_device(device)
     else:
+        print("Using CPU")
         device = torch.device("cpu")
     np.random.seed(args.seed)
     torch.random.manual_seed(args.seed)
