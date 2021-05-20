@@ -26,12 +26,10 @@ class T5ModelForMC(T5PreTrainedModel):
 
         encoder_config = copy.deepcopy(config)
         encoder_config.use_cache = False
-        print(f"encoder output_hidden_states: {encoder_config.output_hidden_states}")
         self.encoder = T5Stack(encoder_config, self.shared)
 
         decoder_config = copy.deepcopy(config)
         decoder_config.is_decoder = True
-        print(f"decoder output_hidden_states: {decoder_config.output_hidden_states}")
         self.decoder = T5Stack(decoder_config, self.shared)
 
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
@@ -85,14 +83,9 @@ class T5ModelForMC(T5PreTrainedModel):
             # Convert encoder inputs in embeddings if needed
             # hidden_states = kwargs_encoder.pop("inputs_embeds", None)
             # if hidden_states is None:
-                # encoder_inputs_ids = kwargs_encoder.pop("input_ids")
-                # hidden_states = self.shared(encoder_inputs_ids)  # Convert inputs in embeddings
+            #     encoder_inputs_ids = kwargs_encoder.pop("input_ids")
+            #     hidden_states = self.shared(encoder_inputs_ids)  # Convert inputs in embeddings
 
-            if "input_ids" not in kwargs_encoder.keys():
-                print("input_ids not in kwargs_encoder!")
-                print(f"inputs_embeds in kwargs_encoder: {'inputs_embeds' in kwargs_encoder.keys()}")
-                print(f"kwargs_encoder.keys(): {kwargs_encoder.keys()}")
-                print(f"kwargs.keys(): {kwargs.keys()}")
             encoder_outputs = self.encoder(**kwargs_encoder)
             encoder_hidden_states = encoder_outputs.last_hidden_state
             encoder_outputs = (encoder_outputs.last_hidden_state,) + (encoder_outputs.hidden_states,) + (encoder_outputs.attentions,)
@@ -103,8 +96,8 @@ class T5ModelForMC(T5PreTrainedModel):
         # Convert decoder inputs in embeddings if needed
         # hidden_states = kwargs_decoder.pop("inputs_embeds", None)
         # if hidden_states is None:
-            # decoder_inputs_ids = kwargs_decoder.pop("input_ids")
-            # hidden_states = self.shared(decoder_inputs_ids)
+        #     decoder_inputs_ids = kwargs_decoder.pop("input_ids")
+        #     hidden_states = self.shared(decoder_inputs_ids)
 
         kwargs_decoder["encoder_hidden_states"] = encoder_hidden_states
         kwargs_decoder["encoder_attention_mask"] = kwargs_encoder.get("attention_mask", None)
@@ -115,14 +108,11 @@ class T5ModelForMC(T5PreTrainedModel):
         # import ipdb; ipdb.set_trace()
         decoder_outputs = self.decoder(**kwargs_decoder)
 
-        sequence_output = decoder_outputs[0]
+        sequence_output = decoder_outputs.last_hidden_state
         # Rescale output before projecting on vocab
         # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
         sequence_output = sequence_output * (self.model_dim ** -0.5)
         lm_logits = self.lm_head(sequence_output)
-        print(f"lm_logits: {lm_logits is None}")
-        print(f"lm_labels: {lm_labels is None}")
-        print(f"decoder_outputs.hidden_states: {decoder_outputs.hidden_states is None}")
 
         decoder_outputs = (lm_logits,) + (decoder_outputs.hidden_states,) + (decoder_outputs.attentions,)  # decoder_outputs[1:]  # Add hidden states and attention if they are here
         
@@ -192,8 +182,8 @@ class T5ModelForMC(T5PreTrainedModel):
             # Convert encoder inputs in embeddings if needed
             # hidden_states = kwargs_encoder.pop("inputs_embeds", None)
             # if hidden_states is None:
-                # encoder_inputs_ids = kwargs_encoder.pop("input_ids")
-                # hidden_states = self.shared(encoder_inputs_ids)  # Convert inputs in embeddings
+            #     encoder_inputs_ids = kwargs_encoder.pop("input_ids")
+            #     hidden_states = self.shared(encoder_inputs_ids)  # Convert inputs in embeddings
 
             encoder_outputs = self.encoder(**kwargs_encoder)
             encoder_hidden_states = encoder_outputs.last_hidden_state
@@ -205,8 +195,8 @@ class T5ModelForMC(T5PreTrainedModel):
         # Convert decoder inputs in embeddings if needed
         # hidden_states = kwargs_decoder.pop("inputs_embeds", None)
         # if hidden_states is None:
-            # decoder_inputs_ids = kwargs_decoder.pop("input_ids")
-            # hidden_states = self.shared(decoder_inputs_ids)
+        #     decoder_inputs_ids = kwargs_decoder.pop("input_ids")
+        #     hidden_states = self.shared(decoder_inputs_ids)
 
         kwargs_decoder["encoder_hidden_states"] = encoder_hidden_states
         kwargs_decoder["encoder_attention_mask"] = kwargs_encoder.get("attention_mask", None)
@@ -219,7 +209,6 @@ class T5ModelForMC(T5PreTrainedModel):
         # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
         sequence_output = sequence_output * (self.model_dim ** -0.5)
         lm_logits = self.lm_head(sequence_output)
-        print(f"lm_logits is none: {lm_logits is None}")
 
         decoder_outputs = (lm_logits,) + (decoder_outputs.hidden_states,) + (decoder_outputs.attentions,)  # decoder_outputs[1:]  # Add hidden states and attention if they are here
         if lm_labels is not None:            
