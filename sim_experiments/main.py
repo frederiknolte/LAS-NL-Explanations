@@ -262,14 +262,17 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
 
             if args.do_task:                
                 if 't5' in args.task_pretrained_name and not ST_RA:
+                    print("1. Checkpoint")
                     outputs = model(input_ids = task_input_ids, 
                                 attention_mask = task_input_masks)
+                    print("2. Checkpoint")
                     encoder_hidden_states = outputs[1]
                     outputs = model(encoder_hidden_states = encoder_hidden_states, 
                                     encoder_attention_mask = task_input_masks,
                                     decoder_input_ids = task_answer_ids, 
                                     decoder_lm_labels = task_answer_labels, 
                                     decoder_attention_mask = task_answer_masks)
+                    print("3. Checkpoint")
                     task_loss = outputs[0] / args.grad_accumulation_factor 
                     choice_losses = None                
                     # now get likelihoods for each choice 
@@ -279,6 +282,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                         expand_shape.insert(1, num_choices)
                         encoder_hidden_states = encoder_hidden_states.unsqueeze(1).expand(expand_shape)
                         task_input_masks = task_input_masks.unsqueeze(1).expand_as(task_output_masks)
+                        print("4. Checkpoint")
 
                         outputs = model(encoder_hidden_states = encoder_hidden_states, 
                                                 encoder_attention_mask = task_input_masks,
@@ -286,6 +290,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                                                 decoder_lm_labels = task_output_labels, 
                                                 decoder_attention_mask = task_output_masks)
                         # choice_losses is of shape: batch_size x num_choices, because task_output_ids had a num_choices dim
+                        print("5. Checkpoint")
                         choice_losses = outputs[0]
                 elif 't5' in args.task_pretrained_name and ST_RA:
                     batch_shape = list(task_input_ids.shape)
@@ -329,6 +334,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 label_probs_list.extend(label_probs)
 
             if args.do_explain:
+                print("6. Checkpoint")
                 outputs = model(input_ids = explanation_input_ids,
                                 encoder_attention_mask = explanation_input_masks,
                                 decoder_input_ids = explanation_output_ids, 
@@ -336,6 +342,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                                 decoder_attention_mask = explanation_output_masks)
                 explanation_loss = outputs[0] / args.grad_accumulation_factor
                 encoder_hidden_states = outputs[2]
+                print("7. Checkpoint")
 
             if multi_gpu:
                 task_loss = task_loss.mean()
@@ -349,16 +356,22 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
                 else:
+                    print("8. Checkpoint")
                     loss.backward()                        
                 # step
+                print("19. Checkpoint")
                 if (step+1) % args.grad_accumulation_factor == 0:
                     if args.fp16:
                         torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
                     else:
                         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    print("10. Checkpoint")
                     optimizer.step()
+                    print("11. Checkpoint")
                     scheduler.step()
+                    print("12. Checkpoint")
                     optimizer.zero_grad()
+                    print("13. Checkpoint")
                     n_steps += 1
                     # print("stepping!")     
 
