@@ -18,12 +18,16 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         extension = 'tsv'
         sep = '\t'        
         folder = 'data/e-SNLI-data'
-    elif data == 'circa':
+    elif data == 'circa_NLI':
         extension = 'csv'
         sep = ','
-        folder = 'data/circa'
-    save_dir = os.path.join(args.base_dir, 'saved_models')
-    cache_dir = os.path.join(args.base_dir, 'cached_models')
+        folder = 'data/circa/NLI'
+    elif data == 'circa_QA':
+        extension = 'csv'
+        sep = ','
+        folder = 'data/circa/QA'
+    save_dir = os.path.join(args.base_dir, 'save_dir')
+    cache_dir = os.path.join(args.base_dir, 'cache_dir')
     pretrained_name = args.task_pretrained_name + '-' + model_size
     train_file = os.path.join(folder, 'train.%s' % extension)
     dev_file = os.path.join(folder, 'dev.%s' % extension)
@@ -44,25 +48,28 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         small_data_add = ''
     if xe_col not in to_use.columns or args.overwrite:
         print("\nWriting XE predictions...")
-        os.system(f"python {script}.py --gpu {gpu} --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
+        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations true --explanations_to_use {explanations_to_use} "
                   f"--dev_batch_size 20 "
+                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix XE "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
     if x_col not in to_use.columns or args.overwrite:
         print("Writing X predictions...")
-        os.system(f"python {script}.py --gpu {gpu} --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
-                  f"--data_dir {folder} --condition_on_explanations false "
+        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
+                  f"--data_dir {folder} --condition_on_explanations false --explanations_to_use {explanations_to_use} "
+                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
                   f"--dev_batch_size 20 "
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix X "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
     if e_col not in to_use.columns or args.overwrite:
         print("Writing E predictions...")
-        os.system(f"python {script}.py --gpu {gpu} --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
+        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations true --explanations_to_use {explanations_to_use} --explanations_only true "
                   f"--dev_batch_size 20 "
+                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix E "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
@@ -156,7 +163,7 @@ def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()    
-    parser.add_argument("--gpu", default=-1, type=int, help='')    
+    parser.add_argument("--gpu", default=None, type=int, help='')
     parser.add_argument("--condition", default = "get_sim_metric", type=str, help='')    
     parser.add_argument("--data", default = 'NLI', help='')    
     parser.add_argument("--model_name", default ='', type=str, help='')   
