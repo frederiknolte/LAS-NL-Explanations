@@ -773,7 +773,7 @@ if __name__ == "__main__":
         model = load_model(args, device, tokenizer, multi_gpu = multi_gpu, finetuned_path = prefinetuned_path)    
         
         # LOAD OPTIMIZER
-        num_train_optimization_steps = args.num_train_epochs * int(len(train_dataloader.dataset) / args.train_batch_size / args.grad_accumulation_factor)
+        num_train_optimization_steps = args.num_train_epochs * int(len(train_dataloader._loader.dataset) / args.train_batch_size / args.grad_accumulation_factor)
         optimizer = prepare_optimizer(args, model = model, num_train_optimization_steps = num_train_optimization_steps)
         
         # mixed precision version of models + optimizers
