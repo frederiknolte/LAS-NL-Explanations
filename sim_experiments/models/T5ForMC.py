@@ -113,10 +113,10 @@ class T5ModelForMC(T5PreTrainedModel):
         # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
         sequence_output = sequence_output * (self.model_dim ** -0.5)
         lm_logits = self.lm_head(sequence_output)
-
-        decoder_outputs = (lm_logits,) + (decoder_outputs.hidden_states,) + (decoder_outputs.attentions,)  # decoder_outputs[1:]  # Add hidden states and attention if they are here
-        
-        if lm_labels is not None:            
+        decoder_outputs = (lm_logits,) + (decoder_outputs.last_hidden_state,) + (torch.stack(decoder_outputs.attentions),
+                                                                                          )  # decoder_outputs[1:]  # Add
+        # hidden states and attention if they are here
+        if lm_labels is not None:
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = lm_labels[..., 1:].contiguous()
             loss_fct = CrossEntropyLoss(ignore_index=-100, reduction = 'none')
