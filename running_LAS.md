@@ -74,4 +74,54 @@ The job file contains the following setting:
 - ``--data`` Select `circa_NLI` for NLI tasks and `circa_QA` for QA tasks.
 
 ## Running LAS on TPU
-TBD
+
+This section describes how to run the LAS model on TPUs.
+
+### Setting up the Environment
+
+1. Connect to your TPU
+
+2. Download the Miniconda installer:
+   ```shell
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh
+    ```
+
+3. Install Anaconda:
+   ```shell
+    bash Miniconda3-latest-Linux-x86_64.sh
+    ```
+   
+4. Create the Environment:
+   ```shell
+    conda create -n cdm python=3.7
+    ```
+   
+5. Activate the Environment:
+   ```shell
+   source activate cdm
+    ```
+
+6. Install the required packages:
+   ```shell
+    pip install -r LAS/requirements.txt
+    ```
+
+### Starting the Training on TPU
+
+1. Go to the Google Cloud Console on your browser and visit the TPU section. Copy the IP address of the TPU instance.
+
+2. Execute the following in the TPU shell:
+   ```shell
+   export TPU_IP_ADDRESS=your-TPU-IP-address; \
+   export XRT_TPU_CONFIG="tpu_worker;0;$TPU_IP_ADDRESS:8470"
+    ```
+
+3. Move to the correct directory:
+   ```shell
+   cd LAS-NL-Explanations/sim_experiments/
+    ```
+
+4. Start the training:
+   ```shell
+   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 4 -g 3 --save_dir save_dir --cache_dir cache_dir --server_number 1 --model t5-small --use_tpu
+    ```
