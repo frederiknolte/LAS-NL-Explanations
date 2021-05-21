@@ -134,6 +134,7 @@ def load_model(args, device, tokenizer, multi_gpu = True, finetuned_path = None)
             project_to_small=False,
             cache_dir = args.cache_dir)
         model.resize_token_embeddings(len(tokenizer))
+        model.set_input_embeddings(model.shared)
         
     if finetuned_path is not None:
         model_state_dict = torch.load(finetuned_path, map_location=lambda storage, loc: storage) # args for preventing memory leakage across gpus
@@ -267,7 +268,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                                 attention_mask = task_input_masks)
                     print("2. Checkpoint")
                     encoder_hidden_states = outputs[1]
-                    outputs = model(encoder_hidden_states = encoder_hidden_states, 
+                    outputs = model(encoder_hidden_states = encoder_hidden_states,
                                     encoder_attention_mask = task_input_masks,
                                     decoder_input_ids = task_answer_ids, 
                                     decoder_lm_labels = task_answer_labels, 
@@ -359,7 +360,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     print("8. Checkpoint")
                     loss.backward()                        
                 # step
-                print("19. Checkpoint")
+                print("9. Checkpoint")
                 if (step+1) % args.grad_accumulation_factor == 0:
                     if args.fp16:
                         torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -493,8 +494,8 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     print(f"\n  {split_name.capitalize()} total time: {run_time:1.2f} minutes")
 
     if write_predictions:
-        extension = 'tsv' if 'NLI' in args.data_dir else 'csv'
-        delimiter = '\t' if 'NLI' in args.data_dir else ','
+        extension = 'tsv' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else 'csv'
+        delimiter = '\t' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else ','
  
         if args.do_task:
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
