@@ -765,7 +765,6 @@ if __name__ == "__main__":
     # LOAD DATA
     print("Loading data...")
     train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader = load_data(args, data_name, tokenizer, device)
-    print(f"Data set sizes: \n Train: {len(train_dataloader.dataset)} \n Eval: {len(dev_dataloader.dataset)} \n Test: {len(test_dataloader.dataset)}")
 
     # flag so that model loaded before debug flag
     if args.do_train:
