@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import T5PreTrainedModel
 from transformers.models.t5.modeling_t5 import T5Stack
+from transformers import TFDistilBertForMultipleChoice
 from torch.nn import CrossEntropyLoss
 import copy
 
@@ -58,11 +59,12 @@ class T5ModelForMC(T5PreTrainedModel):
         # We let the specific kwargs override the common ones in case of conflict.
 
         # IF decoder_input_ids has NUM CHOICES dimension, return .QA_forward. this exists so we can wrap model with torch.nn.DataParallel, which must call forward
+        print("1. T5ForMC Checkpoint")
         if 'decoder_input_ids' in kwargs.keys():
             if kwargs['decoder_input_ids'].dim() == 3: # batch_size x num_choices x max_seq_len
                 return self.QA_forward(**kwargs)
 
-
+        print("2. T5ForMC Checkpoint")
         lm_labels = kwargs.pop("decoder_lm_labels", None)
 
         kwargs_common = dict(
@@ -76,10 +78,12 @@ class T5ModelForMC(T5PreTrainedModel):
         kwargs_decoder.update(dict((k[len("decoder_") :], v) for k, v in kwargs.items() if k.startswith("decoder_")))
 
         # import ipdb; ipdb.set_trace()
-
+        print("3. T5ForMC Checkpoint")
         # Encode if needed (training, first prediction pass)
         encoder_hidden_states = kwargs_encoder.pop("hidden_states", None)
+        print("4. T5ForMC Checkpoint")
         if encoder_hidden_states is None:
+            print("5. T5ForMC Checkpoint")
             # Convert encoder inputs in embeddings if needed
             # hidden_states = kwargs_encoder.pop("inputs_embeds", None)
             # if hidden_states is None:
@@ -87,11 +91,13 @@ class T5ModelForMC(T5PreTrainedModel):
             #     hidden_states = self.shared(encoder_inputs_ids)  # Convert inputs in embeddings
 
             encoder_outputs = self.encoder(**kwargs_encoder)
+            print("6. T5ForMC Checkpoint")
             encoder_hidden_states = encoder_outputs.last_hidden_state
             encoder_outputs = (encoder_outputs.last_hidden_state,) + (encoder_outputs.hidden_states,) + (encoder_outputs.attentions,)
         else:
             encoder_outputs = ()
 
+        print("7. T5ForMC Checkpoint")
         # Decode
         # Convert decoder inputs in embeddings if needed
         # hidden_states = kwargs_decoder.pop("inputs_embeds", None)
@@ -106,36 +112,47 @@ class T5ModelForMC(T5PreTrainedModel):
         # print(kwargs_decoder["encoder_attention_mask"].shape)  
         # print(hidden_states.shape)
         # import ipdb; ipdb.set_trace()
+        print("8. T5ForMC Checkpoint")
         decoder_outputs = self.decoder(**kwargs_decoder)
+        print("9. T5ForMC Checkpoint")
 
         sequence_output = decoder_outputs.last_hidden_state
         # Rescale output before projecting on vocab
         # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
         sequence_output = sequence_output * (self.model_dim ** -0.5)
+        print("10. T5ForMC Checkpoint")
         lm_logits = self.lm_head(sequence_output)
+        print("11. T5ForMC Checkpoint")
         decoder_outputs = (lm_logits,) + (decoder_outputs.last_hidden_state,) + (torch.stack(decoder_outputs.attentions),
                                                                                           )  # decoder_outputs[1:]  # Add
         # hidden states and attention if they are here
         if lm_labels is not None:
+            print("12. T5ForMC Checkpoint")
             shift_logits = lm_logits[..., :-1, :].contiguous()
+            print("13. T5ForMC Checkpoint")
             shift_labels = lm_labels[..., 1:].contiguous()
+            print("14. T5ForMC Checkpoint")
             loss_fct = CrossEntropyLoss(ignore_index=-100, reduction = 'none')
+            print("15 T5ForMC Checkpoint")
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            print("16. T5ForMC Checkpoint")
 
             # reshape to batch shape (shifted)
             batch_shape = shift_labels.shape
             loss = loss.view(batch_shape)
             # get per data point loss
-            loss = torch.mean(loss, dim=-1)                
+            loss = torch.mean(loss, dim=-1)
+            print("17. T5ForMC Checkpoint")
             if reduce_batch:
                 loss = loss.mean()
             if loss_weights is not None:
                 loss = loss * loss_weights
+            print("18. T5ForMC Checkpoint")
 
             decoder_outputs = (
                 loss,
             ) + decoder_outputs  # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
-
+        print("19. T5ForMC Checkpoint")
         return decoder_outputs + encoder_outputs
 
 
