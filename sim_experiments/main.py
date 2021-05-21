@@ -1,5 +1,6 @@
 import os
 import argparse
+import pickle
 import random
 import csv
 import time
@@ -18,7 +19,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from models.T5ForMC import T5ModelForMC
 from transformers import T5Tokenizer, T5Config, AutoTokenizer, AutoConfig
-from transformers import RobertaForSequenceClassification, RobertaConfig
+from transformers import RobertaForSequenceClassification, RobertaConfig, TFDistilBertForSequenceClassification, DistilBertConfig
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 import utils, QA_data_utils, NLI_data_utils
@@ -93,9 +94,9 @@ def load_data(args, data_name, tokenizer):
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
     train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=True, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 2, pin_memory = True)
+                num_workers = 2, pin_memory = True, drop_last=True)
     sequential_train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=False, batch_size=args.dev_batch_size, 
-                num_workers = 2, pin_memory = True)
+                num_workers = 2, pin_memory = True, drop_last=True)
     
     dev_tensors = prep_function(args, examples = dev_examples, 
                                             tokenizer = tokenizer, 
@@ -104,7 +105,7 @@ def load_data(args, data_name, tokenizer):
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
     dev_dataloader = DataLoader(TensorDataset(*dev_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 2, pin_memory = True)
+                num_workers = 2, pin_memory = True, drop_last=True)
     
     test_tensors = prep_function(args, examples = test_examples, 
                                             tokenizer = tokenizer, 
@@ -113,7 +114,7 @@ def load_data(args, data_name, tokenizer):
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
     test_dataloader = DataLoader(TensorDataset(*test_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 2, pin_memory = True)
+                num_workers = 2, pin_memory = True, drop_last=True)
     
     return train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader
 
@@ -125,8 +126,8 @@ def load_model(args, device, tokenizer, multi_gpu = True, finetuned_path = None)
         print(f"\nLoading fine-tuned model: {finetuned_path}...")
 
     if 'bert' in args.task_pretrained_name:
-        config = RobertaConfig.from_pretrained(args.task_pretrained_name, num_labels=3)
-        model = RobertaForSequenceClassification.from_pretrained(args.task_pretrained_name, config=config, cache_dir = args.cache_dir)
+        config = DistilBertConfig.from_pretrained(args.task_pretrained_name, num_labels=3)
+        model = TFDistilBertForSequenceClassification.from_pretrained(args.task_pretrained_name, config=config, cache_dir = args.cache_dir)
 
     if 't5' in args.task_pretrained_name:
         model_class = T5ModelForMC
@@ -179,9 +180,9 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     pad_token_id = tokenizer.pad_token_id
 
     # init stat vars
-    task_loss_sum = 0
-    explanation_loss_sum = 0
-    acc_sum = 0
+    task_loss_sum = torch.tensor([0.]).to(device)
+    explanation_loss_sum = torch.tensor([0.]).to(device)
+    acc_sum = torch.tensor([0.]).to(device)
     n_steps, n_data_points = 0, 0
     n_batches = len(dataloader)
     start_time = time.time()
@@ -320,19 +321,39 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     choice_losses = -outputs[1] # negative logits, preds gotten by argmin
                     task_loss = outputs[0] / args.grad_accumulation_factor 
                     # print(task_loss)
-             
+
+                # print("5.1. Checkpoint")
+                # # compute task accuracy
+                # labels = task_choice_labels.detach().cpu().numpy()
+                # # choice_losses = choice_losses.detach().cpu().numpy()
+                # preds = np.argmin(choice_losses.detach().cpu().numpy(), axis=-1)
+                # n_correct = np.sum(preds==labels)
+                # acc_sum += n_correct
+                # preds_list.extend(preds.tolist())
+                # print("5.2. Checkpoint")
+
+                print("5.1. Checkpoint")
                 # compute task accuracy
-                labels = task_choice_labels.detach().cpu().numpy()
+                labels = task_choice_labels.detach()
+                print("5.2. Checkpoint")
                 # choice_losses = choice_losses.detach().cpu().numpy()
-                preds = np.argmin(choice_losses.detach().cpu().numpy(), axis=-1)
-                n_correct = np.sum(preds==labels)
-                acc_sum += n_correct 
-                preds_list.extend(preds.tolist())
+                preds = torch.argmin(choice_losses.detach(), dim=-1)
+                print("5.3. Checkpoint")
+                n_correct = torch.sum(torch.eq(preds, labels).int())
+                print("5.4. Checkpoint")
+                acc_sum += n_correct
+                print("5.5. Checkpoint")
+                preds_list.append(preds)
+                print("5.6. Checkpoint")
 
                 # get pred probs
                 choice_probs = nn.functional.softmax(-choice_losses.detach(), dim=-1)
-                label_probs = [choice_probs[i,label].item() for i, label in enumerate(labels)]
-                label_probs_list.extend(label_probs)
+                print("5.7. Checkpoint")
+                # label_probs = [choice_probs[i,label].item() for i, label in enumerate(labels)]
+                label_probs = torch.gather(choice_probs, 1, labels.unsqueeze(1))
+                print("5.8. Checkpoint")
+                label_probs_list.append(label_probs)
+                print("5.9. Checkpoint")
 
             if args.do_explain:
                 print("6. Checkpoint")
@@ -362,22 +383,25 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 # step
                 print("9. Checkpoint")
                 if (step+1) % args.grad_accumulation_factor == 0:
+                    print("10. Checkpoint")
                     if args.fp16:
                         torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
                     else:
                         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                    print("10. Checkpoint")
-                    optimizer.step()
                     print("11. Checkpoint")
-                    scheduler.step()
+                    xm.optimizer_step(optimizer)
                     print("12. Checkpoint")
-                    optimizer.zero_grad()
+                    scheduler.step()
                     print("13. Checkpoint")
+                    optimizer.zero_grad()
+                    print("14. Checkpoint")
                     n_steps += 1
                     # print("stepping!")     
+                print("15. Checkpoint")
 
             # explanation sampling. sample when do_explain is true and either writing predictions or evaluating
             if sample_exps:
+                print("16. Checkpoint")
                 if args.do_task: # get predicted contexts
                     use_contexts = torch.stack(
                             [explanation_context_ids[i, preds[i], :] for i in range(batch_size)], dim = 0
@@ -390,6 +414,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     use_contexts = explanation_context_ids
                 elif not args.multi_explanation: # take an arbitrary context for each data point (all the same)
                     use_contexts = explanation_context_ids[:,0,:]
+                print("17. Checkpoint")
 
                 # sample
                 reshape = False
@@ -403,24 +428,26 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     encoder_hidden_states = encoder_hidden_states.reshape(-1, encoder_hidden_states.size(-2), encoder_hidden_states.size(-1))
                     explanation_input_masks = explanation_input_masks.reshape(-1, explanation_input_masks.size(-1))
                     reshape = True
+                print("18. Checkpoint")
                 samples = utils.T5_sample(model, 
                     encoder_hidden_states=encoder_hidden_states,
                     decoder_input_ids=use_contexts,
                     encoder_attention_mask=explanation_input_masks, 
                     tokenizer=tokenizer, 
                     max_sample_len=args.max_sample_len)
+                print("19. Checkpoint")
                 if reshape:
                     samples = samples.view(first_two_dims + [samples.size(-1)])
-
+                print("20. Checkpoint")
                 if not args.do_task and args.multi_explanation and write_predictions: # condition where three are sampled per item
                     pred_explanations = [question[task_choice_labels[i].item()] for i, question in enumerate(samples.tolist())]
-                    batch_multi_sample_strs = utils.detok_batch(tokenizer, samples, 
+                    batch_multi_sample_strs = utils.detok_batch(tokenizer, samples,
                                     ignore_tokens = ignore_tokens_list,
                                     eos_token = tokenizer.eos_token)
                     multi_sample_strs.extend(batch_multi_sample_strs)
                 else:
                     pred_explanations = samples.squeeze(1).tolist()
-
+                print("21. Checkpoint")
                 # detokenize expl. labels and predictions
                 batch_label_strs = utils.detok_batch(tokenizer, explanation_only_ids, 
                                                 ignore_tokens = ignore_tokens_list)
@@ -429,11 +456,13 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                                                 eos_token = tokenizer.eos_token)
                 label_strs.extend(batch_label_strs)
                 sample_strs.extend(batch_sample_strs)
-
+            print("22. Checkpoint")
             # track stats
-            task_loss_sum += task_loss.item()
-            explanation_loss_sum += explanation_loss.item()
+            task_loss_sum += task_loss
+            explanation_loss_sum += explanation_loss
             n_data_points += batch_size
+
+            print("23. Checkpoint")
 
             # clean up
             if is_train:
@@ -441,6 +470,8 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 if args.do_task: del task_loss
                 if args.do_explain: del explanation_loss
                 del batch, outputs
+
+            print("24. Checkpoint")
 
         elapsed_time = (time.time() - start_time) / 60
         print(f"Elapsed time: {elapsed_time:1.2f} minutes")
@@ -494,10 +525,12 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     print(f"\n  {split_name.capitalize()} total time: {run_time:1.2f} minutes")
 
     if write_predictions:
+        print("25. Checkpoint")
         extension = 'tsv' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else 'csv'
         delimiter = '\t' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else ','
  
         if args.do_task:
+            print("26. Checkpoint")
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
             df = pd.read_csv(df_path, sep=delimiter)
             n = len(df)
@@ -505,25 +538,33 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
             while len(preds_list) < n:
                 preds_list.append('N/A')
             df[new_col_name] = preds_list
+            print("27. Checkpoint")
             if 'sim' in args.model_name.lower():
+                print("28. Checkpoint")
                 new_col_name = f'label_probs_{save_name}' if args.preds_suffix is None else f'label_probs_{save_name}_{args.preds_suffix}'
                 while len(label_probs_list) < n:
                     label_probs_list.append('N/A')
                 df[new_col_name] = label_probs_list
+                print("29. Checkpoint")
             df.to_csv(df_path, index = False, sep = delimiter)
+            print("30. Checkpoint")
 
         if args.do_explain:
+            print("31. Checkpoint")
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
             df = pd.read_csv(df_path,sep=delimiter)
             n = len(df)
 
             if args.multi_explanation and args.do_task:
+                print("32. Checkpoint")
                 col_name = f't5-MT-multi-exp-pred-seed{args.seed}' if not args.save_agent else 't5-agent-ra-exp'
                 while len(sample_strs) < n:
                     sample_strs.append('N/A')
                 df[col_name] = sample_strs
+                print("33. Checkpoint")
 
             if args.multi_explanation and not args.do_task:
+                print("34. Checkpoint")
                 explanations = np.array(multi_sample_strs)
                 exp_cols = [f't5-multi-exp-{i}-seed{args.seed}' for i in range(num_choices)]
                 for j, col_name in enumerate(exp_cols):
@@ -531,8 +572,10 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     while len(new_col) < n:
                         new_col.append('N/A')
                     df[col_name] = new_col
+                print("35. Checkpoint")
             
             if not args.multi_explanation:
+                print("36. Checkpoint")
                 if args.do_task:
                     col_name = f't5-MT-single-exp-seed{args.seed}'  if not args.save_agent else 't5-agent-re-exp'
                 else:
@@ -540,11 +583,14 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
 
                 while len(sample_strs) < n:
                     sample_strs.append('N/A')
-
+                print("37. Checkpoint")
                 df[col_name] = sample_strs
 
+            print("38. Checkpoint")
             df.to_csv(df_path, index = False, sep=delimiter)
-    
+            print("39. Checkpoint")
+
+    print("40. Checkpoint")
     return stats_dict
 
 
@@ -624,6 +670,8 @@ if __name__ == "__main__":
     parser.add_argument('--write_predictions', action='store_true', default = False, help = 'Write predictions in data file')
     parser.add_argument("--load_epoch", default=0, type=int, help = "Epoch to effectively start at.")  
     parser.add_argument('--pre_eval', action='store_true', default = False, help = 'Evaluate model once before training')
+
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     
     # check argparse arguments. some argument settings don't make sense together
     args = parser.parse_args()    
@@ -745,13 +793,13 @@ if __name__ == "__main__":
                        scheduler = None, 
                        tokenizer = tokenizer,
                        sample_exps = False, 
-                       split_name = 'dev')   
+                       split_name = 'dev')
         report.print_epoch_scores(epoch = -1, scores = stats_dict)
         stats_dict = {}
 
     # BEGIN TRAINING
-    best_epoch = -1.0
-    best_score = -1.0
+    best_epoch = torch.tensor([-1.0])
+    best_score = torch.tensor([-1.0])
     if args.do_train:
 
         # training loop
@@ -767,28 +815,40 @@ if __name__ == "__main__":
                                     scheduler = scheduler, 
                                     tokenizer = tokenizer,
                                     sample_exps = False,
-                                    split_name = 'train')   
+                                    split_name = 'train')
             stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu, 
                                    model = model, 
                                    optimizer = None, 
                                    scheduler = None, 
                                    tokenizer = tokenizer,
                                    sample_exps = (not args.do_task and args.do_explain),
-                                   split_name = 'dev')   
+                                   split_name = 'dev')
             score = stats_dict['dev_' + args.select_for]        
                 
             # check for best dev score and save if new best
-            if score > best_score:
-                print(f"  New best model. Saving model in {args.save_dir}")
-                model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
-                torch.save(model_to_save.state_dict(), model_path)
-                best_score = score
-                best_epoch = e                                 
-            
+            # if score[0] > best_score[0]:
+            print(f"  New best model. Saving model in {args.save_dir}")
+            model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
+            state_dict = model_to_save.state_dict()
+            print("0.1. Main Checkpoint")
+            # torch.save(state_dict, model_path)
+            if xm.is_master_ordinal():
+                print("0.2. Main Checkpoint")
+                model.config.save_pretrained("save_dir/")
+            print("0.3. Main Checkpoint")
+            xm.save(state_dict, model_path)
+            print("0.4. Main Checkpoint")
+            best_score = score
+            best_epoch = e
+            print("1. Main Checkpoint")
+
+            print("2. Main Checkpoint")
             # write + print summary stats
             report.write_epoch_scores(epoch = e, scores = stats_dict)
             report.print_epoch_scores(epoch = e, scores = stats_dict)
+            print("3. Main Checkpoint")
 
+        print("4. Main Checkpoint")
         end_time = time.time()
         training_time = (end_time-start_time) / 60
         unit = 'minutes' if training_time < 60 else 'hours'
@@ -798,10 +858,12 @@ if __name__ == "__main__":
 
     # FINAL EVAL
 
+    print("5. Main Checkpoint")
     model = load_model(args, device, tokenizer, multi_gpu = multi_gpu, finetuned_path = model_path)    
     if multi_gpu:
         model = torch.nn.DataParallel(model)
-    
+
+    print("6. Main Checkpoint")
     if args.do_eval:
         sample_exps = (not args.do_task and args.do_explain)
         print("\nGetting final eval results...\n")
@@ -811,7 +873,7 @@ if __name__ == "__main__":
                                scheduler = None, 
                                tokenizer = tokenizer, 
                                sample_exps = sample_exps,
-                               split_name = 'dev')   
+                               split_name = 'dev')
         if data_name != 'QA' or args.labels_to_use != 'label':
             stats_dict = train_or_eval_epoch(args, device, test_dataloader, stats_dict, multi_gpu = multi_gpu, 
                                model = model, 
@@ -819,7 +881,7 @@ if __name__ == "__main__":
                                scheduler = None, 
                                tokenizer = tokenizer,
                                sample_exps = sample_exps,
-                               split_name = 'test')       
+                               split_name = 'test')
         
         # print and write final stats2
         dev_acc, test_acc, dev_bleu, test_bleu = -1, -1, -1, -1
@@ -836,8 +898,10 @@ if __name__ == "__main__":
             if sample_exps: dev_bleu = stats_dict['dev_bleu']
             final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Dev BLEU: {dev_bleu:.2f}"    
         if args.do_train:
+            print("7. Main Checkpoint")
             report.write_final_score(args, final_score_str = final_msg, time_msg = time_msg)
         report.print_epoch_scores(epoch = best_epoch, scores = {k:v for k,v in stats_dict.items() if 'train' not in k})
+        print("8. Main Checkpoint")
 
     # write predictions
     if args.write_predictions:
@@ -881,6 +945,7 @@ if __name__ == "__main__":
         print(time_msg)
 
         report.print_epoch_scores(epoch = -1, scores = stats_dict)
+        print("9. Main Checkpoint")
 
     ### END OF SCRIPT ###
 
