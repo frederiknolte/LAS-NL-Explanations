@@ -1,0 +1,28 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_shared_course
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=LAS_calc
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH -N 1
+#SBATCH --time=04:00:00
+#SBATCH --mem=32000M
+#SBATCH --output=outputs/LAS_calc_%A.out
+
+module purge
+module load 2019
+module load Python/3.7.5-foss-2019b
+module load cuDNN/7.6.5.32-CUDA-10.1.243
+module load NCCL/2.5.6-CUDA-10.1.243
+module load Anaconda3/2018.12
+
+# cd into repo dir
+cd $HOME/LAS-NL-Explanations/sim_experiments/
+
+# Activate environment
+source activate cdm
+
+# Run code
+srun python -u compute_sim.py --gpu 0 --model_name sim.ST.RE --explanations_to_use explanation --split_name test --data circa_NLI --seed 21 --bootstrap --labels_to_use prediction --base_dir . --model_size small
+
