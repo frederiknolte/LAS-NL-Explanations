@@ -11,6 +11,7 @@ import torch.nn as nn
 try:
     import torch_xla
     import torch_xla.core.xla_model as xm
+    import torch_xla.distributed.parallel_loader as pl
 except:
     print("Not loading torch-xla\n")
 
@@ -37,7 +38,7 @@ def CE_Loss(probabilities, labels):
     pred_probs = probabilities.gather(-1, labels.unsqueeze(-1))
     return torch.mean(-torch.log(pred_probs))
 
-def load_data(args, data_name, tokenizer):
+def load_data(args, data_name, tokenizer, device):
     '''
     returns pytorch dataloaders for train and eval data
     '''
@@ -116,6 +117,10 @@ def load_data(args, data_name, tokenizer):
     test_dataloader = DataLoader(TensorDataset(*test_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
                 num_workers = 2, pin_memory = True, drop_last=True)
     
+    train_dataloader = pl.MpDeviceLoader(train_dataloader, device)
+    dev_dataloader = pl.MpDeviceLoader(dev_dataloader, device)
+    test_dataloader = pl.MpDeviceLoader(test_dataloader, device)
+    sequential_train_dataloader = pl.MpDeviceLoader(sequential_train_dataloader, device)
     return train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader
 
 
@@ -759,7 +764,7 @@ if __name__ == "__main__":
 
     # LOAD DATA
     print("Loading data...")
-    train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader = load_data(args, data_name, tokenizer)
+    train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader = load_data(args, data_name, tokenizer, device)
     print(f"Data set sizes: \n Train: {len(train_dataloader.dataset)} \n Eval: {len(dev_dataloader.dataset)} \n Test: {len(test_dataloader.dataset)}")
 
     # flag so that model loaded before debug flag
