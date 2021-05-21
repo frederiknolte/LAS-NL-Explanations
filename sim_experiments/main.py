@@ -19,9 +19,9 @@ from torch.utils.data.distributed import DistributedSampler
 
 from models.T5ForMC import T5ModelForMC
 from transformers import T5Tokenizer, T5Config, AutoTokenizer, AutoConfig
-from transformers import RobertaForSequenceClassification, RobertaConfig, TFDistilBertForSequenceClassification, DistilBertConfig
+from transformers import RobertaForSequenceClassification, RobertaConfig, DistilBertForSequenceClassification, DistilBertConfig
 from transformers import AdamW, get_linear_schedule_with_warmup
-
+from transformers import T5ForConditionalGeneration
 import utils, QA_data_utils, NLI_data_utils
 from utils import str2bool
 
@@ -126,14 +126,12 @@ def load_model(args, device, tokenizer, multi_gpu = True, finetuned_path = None)
         print(f"\nLoading fine-tuned model: {finetuned_path}...")
 
     if 'bert' in args.task_pretrained_name:
-        config = DistilBertConfig.from_pretrained(args.task_pretrained_name, num_labels=3)
-        model = TFDistilBertForSequenceClassification.from_pretrained(args.task_pretrained_name, config=config, cache_dir = args.cache_dir)
+        config = DistilBertConfig.from_pretrained(args.task_pretrained_name, num_labels=4)
+        model = DistilBertForSequenceClassification.from_pretrained(args.task_pretrained_name, config=config, cache_dir = args.cache_dir)
 
     if 't5' in args.task_pretrained_name:
-        model_class = T5ModelForMC
-        model = model_class.from_pretrained(args.task_pretrained_name, 
-            project_to_small=False,
-            cache_dir = args.cache_dir)
+        model_class = T5ForConditionalGeneration
+        model = model_class.from_pretrained(args.task_pretrained_name, cache_dir = args.cache_dir)
         model.resize_token_embeddings(len(tokenizer))
         model.set_input_embeddings(model.shared)
         
@@ -265,8 +263,11 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
             if args.do_task:                
                 if 't5' in args.task_pretrained_name and not ST_RA:
                     print("1. Checkpoint")
-                    outputs = model(input_ids = task_input_ids, 
-                                attention_mask = task_input_masks)
+                    outputs = model(
+                        input_ids = task_input_ids, 
+                        attention_mask = task_input_masks,
+                        labels=task_answer_labels
+                    )
                     print("2. Checkpoint")
                     encoder_hidden_states = outputs[1]
                     outputs = model(encoder_hidden_states = encoder_hidden_states,
@@ -315,9 +316,11 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     choice_probs = nn.functional.softmax(-choice_losses, dim=-1)
                     task_loss = utils.CE_Loss(choice_probs, task_choice_labels) / args.grad_accumulation_factor
                 elif 'bert' in args.task_pretrained_name:
-                    outputs = model(input_ids = task_input_ids, 
-                            attention_mask = task_input_masks,
-                            labels = task_choice_labels)
+                    outputs = model(
+                        input_ids = task_input_ids,
+                        attention_mask = task_input_masks,
+                        labels = task_choice_labels
+                    )
                     choice_losses = -outputs[1] # negative logits, preds gotten by argmin
                     task_loss = outputs[0] / args.grad_accumulation_factor 
                     # print(task_loss)
