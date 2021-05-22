@@ -323,7 +323,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                         attention_mask = task_input_masks,
                         labels = task_choice_labels
                     )
-                    logits = outputs.logits
+                    choice_losses = outputs.logits
                     task_loss = outputs.loss / args.grad_accumulation_factor
 
                 # print("5.1. Checkpoint")
