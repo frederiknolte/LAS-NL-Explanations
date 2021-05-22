@@ -95,6 +95,7 @@ This section describes how to run the LAS model on TPUs.
    ```shell
     conda create -n cdm python=3.7
     ```
+    Now log out and log back in again.
    
 5. Activate the Environment:
    ```shell
