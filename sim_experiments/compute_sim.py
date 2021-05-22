@@ -6,7 +6,7 @@ import argparse
 from utils import str2bool
 
 
-def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use, seed, split_name, model_size):
+def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use, seed, split_name):
     '''
     compute sim metric for a model by writing to file (or checking if these in data)
     '''
@@ -28,14 +28,13 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         folder = 'data/circa/QA'
     save_dir = os.path.join(args.base_dir, 'save_dir')
     cache_dir = os.path.join(args.base_dir, 'cache_dir')
-    pretrained_name = args.task_pretrained_name + '-' + model_size
     train_file = os.path.join(folder, 'train.%s' % extension)
     dev_file = os.path.join(folder, 'dev.%s' % extension)
     test_file = os.path.join(folder, 'test.%s' % extension)
     write_base = 'preds' 
-    xe_col = '%s_%s_%s_%s_seed%s_XE' % (write_base, data, pretrained_name, model_name, seed)
-    e_col = '%s_%s_%s_%s_seed%s_E' % (write_base, data, pretrained_name, model_name, seed)
-    x_col = '%s_%s_%s_%s_seed%s_X' % (write_base, data, pretrained_name, model_name, seed)
+    xe_col = '%s_%s_%s_%s_seed%s_XE' % (write_base, data, args.task_pretrained_name, model_name, seed)
+    e_col = '%s_%s_%s_%s_seed%s_E' % (write_base, data, args.task_pretrained_name, model_name, seed)
+    x_col = '%s_%s_%s_%s_seed%s_X' % (write_base, data, args.task_pretrained_name, model_name, seed)
 
     train = pd.read_csv(train_file, sep=sep)
     dev = pd.read_csv(dev_file, sep=sep)
@@ -48,31 +47,31 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         small_data_add = ''
     if xe_col not in to_use.columns or args.overwrite:
         print("\nWriting XE predictions...")
-        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
+        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {args.task_pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations true --explanations_to_use {explanations_to_use} "
-                  f"--dev_batch_size 20 "
-                  "{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
-                  "{('--use_tpu ') if args.use_tpu else ''}"
+                  f"--dev_batch_size 64 "
+                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
+                  f"{('--use_tpu ') if args.use_tpu else ''}"
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix XE "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
     if x_col not in to_use.columns or args.overwrite:
         print("Writing X predictions...")
-        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
+        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {args.task_pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations false --explanations_to_use {explanations_to_use} "
-                  "{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
-                  "{('--use_tpu ') if args.use_tpu else ''}"
-                  f"--dev_batch_size 20 "
+                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
+                  f"{('--use_tpu ') if args.use_tpu else ''}"
+                  f"--dev_batch_size 64 "
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix X "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
     if e_col not in to_use.columns or args.overwrite:
         print("Writing E predictions...")
-        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
+        os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {args.task_pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations true --explanations_to_use {explanations_to_use} --explanations_only true "
-                  f"--dev_batch_size 20 "
-                  "{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
-                  "{('--use_tpu ') if args.use_tpu else ''}"
+                  f"--dev_batch_size 64 "
+                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
+                  f"{('--use_tpu ') if args.use_tpu else ''}"
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix E "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
@@ -81,7 +80,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
     test = pd.read_csv(test_file, sep=sep)
     to_use = dev if split_name == 'dev' else test
 
-    _ = compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, seed, print_results = True)
+    _ = compute_sim(args, to_use, labels_to_use, data, args.task_pretrained_name, model_name, seed, print_results = True)
 
     if args.bootstrap:
         start = time.time()
@@ -93,7 +92,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         for b in range(boot_times):
             boot_idx = np.random.choice(np.arange(len(to_use)), replace=True, size = len(to_use))    
             to_use_boot = to_use.iloc[boot_idx,:]  
-            mean, leaking_diff, nonleaking_diff = compute_sim(args, to_use_boot, labels_to_use, data, pretrained_name, model_name, seed, print_results = False)
+            mean, leaking_diff, nonleaking_diff = compute_sim(args, to_use_boot, labels_to_use, data, args.task_pretrained_name, model_name, seed, print_results = False)
             overall_metric_list.append(mean)
             leaking_diff_list.append(leaking_diff)
             nonleaking_diff_list.append(nonleaking_diff)
@@ -175,8 +174,7 @@ if __name__ == '__main__':
     parser.add_argument("--seed", default = '42', type=str, help='')  
     parser.add_argument('--leaking_param', default = 0, type=float, help='')
     parser.add_argument('--split_name', default='dev', type=str, help='see get_sim_metric')
-    parser.add_argument('--task_pretrained_name', default='t5', type=str, help='')
-    parser.add_argument('--model_size', default='base', type=str, help='')
+    parser.add_argument('--task_pretrained_name', default='t5-base', type=str, help='')
     parser.add_argument('--server_number', '-s', default='13', type=str, help='')
     parser.add_argument('--bootstrap', action='store_true', help='')
     parser.add_argument('--use_tpu', action='store_true', help='')
@@ -193,8 +191,7 @@ if __name__ == '__main__':
                     args.explanations_to_use, 
                     args.labels_to_use, 
                     args.seed, 
-                    args.split_name,
-                    args.model_size)
+                    args.split_name)
 
 
 
