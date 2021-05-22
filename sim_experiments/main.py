@@ -266,18 +266,15 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
 
             if args.do_task:
                 if 't5' in args.task_pretrained_name and not ST_RA:
-                    print("1. Checkpoint")
                     outputs = model(
                         input_ids = task_input_ids,
                         attention_mask = task_input_masks)
-                    print("2. Checkpoint")
                     encoder_hidden_states = outputs[1]
                     outputs = model(encoder_hidden_states = encoder_hidden_states,
                                     encoder_attention_mask = task_input_masks,
                                     decoder_input_ids = task_answer_ids,
                                     decoder_lm_labels = task_answer_labels,
                                     decoder_attention_mask = task_answer_masks)
-                    print("3. Checkpoint")
                     task_loss = outputs[0] / args.grad_accumulation_factor
                     choice_losses = None
                     # now get likelihoods for each choice
@@ -287,7 +284,6 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                         expand_shape.insert(1, num_choices)
                         encoder_hidden_states = encoder_hidden_states.unsqueeze(1).expand(expand_shape)
                         task_input_masks = task_input_masks.unsqueeze(1).expand_as(task_output_masks)
-                        print("4. Checkpoint")
 
                         outputs = model(encoder_hidden_states = encoder_hidden_states,
                                                 encoder_attention_mask = task_input_masks,
@@ -295,7 +291,6 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                                                 decoder_lm_labels = task_output_labels,
                                                 decoder_attention_mask = task_output_masks)
                         # choice_losses is of shape: batch_size x num_choices, because task_output_ids had a num_choices dim
-                        print("5. Checkpoint")
                         choice_losses = outputs[0]
                 elif 't5' in args.task_pretrained_name and ST_RA:
                     batch_shape = list(task_input_ids.shape)
@@ -326,41 +321,20 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     choice_losses = -outputs.logits
                     task_loss = outputs.loss / args.grad_accumulation_factor
 
-                # print("5.1. Checkpoint")
-                # # compute task accuracy
-                # labels = task_choice_labels.detach().cpu().numpy()
-                # # choice_losses = choice_losses.detach().cpu().numpy()
-                # preds = np.argmin(choice_losses.detach().cpu().numpy(), axis=-1)
-                # n_correct = np.sum(preds==labels)
-                # acc_sum += n_correct
-                # preds_list.extend(preds.tolist())
-                # print("5.2. Checkpoint")
-
-                print("5.1. Checkpoint")
                 # compute task accuracy
-                labels = task_choice_labels.detach()
-                print("5.2. Checkpoint")
+                labels = task_choice_labels.detach().cpu().numpy()
                 # choice_losses = choice_losses.detach().cpu().numpy()
-                preds = torch.argmin(choice_losses.detach(), dim=-1)
-                print("5.3. Checkpoint")
-                n_correct = torch.sum(torch.eq(preds, labels).int())
-                print("5.4. Checkpoint")
+                preds = np.argmin(choice_losses.detach().cpu().numpy(), axis=-1)
+                n_correct = np.sum(preds==labels)
                 acc_sum += n_correct
-                print("5.5. Checkpoint")
-                preds_list.append(preds)
-                print("5.6. Checkpoint")
+                preds_list.extend(preds.tolist())
 
                 # get pred probs
                 choice_probs = nn.functional.softmax(-choice_losses.detach(), dim=-1)
-                print("5.7. Checkpoint")
-                # label_probs = [choice_probs[i,label].item() for i, label in enumerate(labels)]
-                label_probs = torch.gather(choice_probs, 1, labels.unsqueeze(1))
-                print("5.8. Checkpoint")
-                label_probs_list.append(label_probs)
-                print("5.9. Checkpoint")
+                label_probs = [choice_probs[i, label].item() for i, label in enumerate(labels)]
+                label_probs_list.extend(label_probs)
 
             if args.do_explain:
-                print("6. Checkpoint")
                 outputs = model(input_ids = explanation_input_ids,
                                 encoder_attention_mask = explanation_input_masks,
                                 decoder_input_ids = explanation_output_ids,
@@ -368,7 +342,6 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                                 decoder_attention_mask = explanation_output_masks)
                 explanation_loss = outputs[0] / args.grad_accumulation_factor
                 encoder_hidden_states = outputs[2]
-                print("7. Checkpoint")
 
             if multi_gpu:
                 task_loss = task_loss.mean()
@@ -382,30 +355,21 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
                 else:
-                    print("8. Checkpoint")
                     loss.backward()
                 # step
-                print("9. Checkpoint")
                 if (step+1) % args.grad_accumulation_factor == 0:
-                    print("10. Checkpoint")
                     if args.fp16:
                         torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
                     else:
                         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                    print("11. Checkpoint")
                     xm.optimizer_step(optimizer)
-                    print("12. Checkpoint")
                     scheduler.step()
-                    print("13. Checkpoint")
                     optimizer.zero_grad()
-                    print("14. Checkpoint")
                     n_steps += 1
                     # print("stepping!")
-                print("15. Checkpoint")
 
             # explanation sampling. sample when do_explain is true and either writing predictions or evaluating
             if sample_exps:
-                print("16. Checkpoint")
                 if args.do_task: # get predicted contexts
                     use_contexts = torch.stack(
                             [explanation_context_ids[i, preds[i], :] for i in range(batch_size)], dim = 0
@@ -418,7 +382,6 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     use_contexts = explanation_context_ids
                 elif not args.multi_explanation: # take an arbitrary context for each data point (all the same)
                     use_contexts = explanation_context_ids[:,0,:]
-                print("17. Checkpoint")
 
                 # sample
                 reshape = False
@@ -432,17 +395,14 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     encoder_hidden_states = encoder_hidden_states.reshape(-1, encoder_hidden_states.size(-2), encoder_hidden_states.size(-1))
                     explanation_input_masks = explanation_input_masks.reshape(-1, explanation_input_masks.size(-1))
                     reshape = True
-                print("18. Checkpoint")
                 samples = utils.T5_sample(model,
                     encoder_hidden_states=encoder_hidden_states,
                     decoder_input_ids=use_contexts,
                     encoder_attention_mask=explanation_input_masks,
                     tokenizer=tokenizer,
                     max_sample_len=args.max_sample_len)
-                print("19. Checkpoint")
                 if reshape:
                     samples = samples.view(first_two_dims + [samples.size(-1)])
-                print("20. Checkpoint")
                 if not args.do_task and args.multi_explanation and write_predictions: # condition where three are sampled per item
                     pred_explanations = [question[task_choice_labels[i].item()] for i, question in enumerate(samples.tolist())]
                     batch_multi_sample_strs = utils.detok_batch(tokenizer, samples,
@@ -451,7 +411,6 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     multi_sample_strs.extend(batch_multi_sample_strs)
                 else:
                     pred_explanations = samples.squeeze(1).tolist()
-                print("21. Checkpoint")
                 # detokenize expl. labels and predictions
                 batch_label_strs = utils.detok_batch(tokenizer, explanation_only_ids,
                                                 ignore_tokens = ignore_tokens_list)
@@ -460,13 +419,11 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                                                 eos_token = tokenizer.eos_token)
                 label_strs.extend(batch_label_strs)
                 sample_strs.extend(batch_sample_strs)
-            print("22. Checkpoint")
             # track stats
             task_loss_sum += task_loss
             explanation_loss_sum += explanation_loss
             n_data_points += batch_size
 
-            print("23. Checkpoint")
 
             # clean up
             if is_train:
@@ -475,10 +432,9 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 if args.do_explain: del explanation_loss
                 del batch, outputs
 
-            print("24. Checkpoint")
 
         elapsed_time = (time.time() - start_time) / 60
-        print(f"Elapsed time: {elapsed_time:1.2f} minutes")
+        # print(f"Elapsed time: {elapsed_time:1.2f} minutes")
 
     # print examples
     if args.print_examples:
@@ -529,46 +485,37 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     print(f"\n  {split_name.capitalize()} total time: {run_time:1.2f} minutes")
 
     if write_predictions:
-        print("25. Checkpoint")
         extension = 'tsv' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else 'csv'
         delimiter = '\t' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else ','
 
         if args.do_task:
-            print("26. Checkpoint")
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
             df = pd.read_csv(df_path, sep=delimiter)
             n = len(df)
             new_col_name = f'preds_{save_name}' if args.preds_suffix is None else f'preds_{save_name}_{args.preds_suffix}'
+            print(f"type(preds_list): {type(preds_list)}")
             while len(preds_list) < n:
                 preds_list.append('N/A')
             df[new_col_name] = preds_list
-            print("27. Checkpoint")
             if 'sim' in args.model_name.lower():
-                print("28. Checkpoint")
                 new_col_name = f'label_probs_{save_name}' if args.preds_suffix is None else f'label_probs_{save_name}_{args.preds_suffix}'
                 while len(label_probs_list) < n:
                     label_probs_list.append('N/A')
                 df[new_col_name] = label_probs_list
-                print("29. Checkpoint")
             df.to_csv(df_path, index = False, sep = delimiter)
-            print("30. Checkpoint")
 
         if args.do_explain:
-            print("31. Checkpoint")
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
             df = pd.read_csv(df_path,sep=delimiter)
             n = len(df)
 
             if args.multi_explanation and args.do_task:
-                print("32. Checkpoint")
                 col_name = f't5-MT-multi-exp-pred-seed{args.seed}' if not args.save_agent else 't5-agent-ra-exp'
                 while len(sample_strs) < n:
                     sample_strs.append('N/A')
                 df[col_name] = sample_strs
-                print("33. Checkpoint")
 
             if args.multi_explanation and not args.do_task:
-                print("34. Checkpoint")
                 explanations = np.array(multi_sample_strs)
                 exp_cols = [f't5-multi-exp-{i}-seed{args.seed}' for i in range(num_choices)]
                 for j, col_name in enumerate(exp_cols):
@@ -576,10 +523,8 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     while len(new_col) < n:
                         new_col.append('N/A')
                     df[col_name] = new_col
-                print("35. Checkpoint")
 
             if not args.multi_explanation:
-                print("36. Checkpoint")
                 if args.do_task:
                     col_name = f't5-MT-single-exp-seed{args.seed}'  if not args.save_agent else 't5-agent-re-exp'
                 else:
@@ -587,14 +532,10 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
 
                 while len(sample_strs) < n:
                     sample_strs.append('N/A')
-                print("37. Checkpoint")
                 df[col_name] = sample_strs
 
-            print("38. Checkpoint")
             df.to_csv(df_path, index = False, sep=delimiter)
-            print("39. Checkpoint")
 
-    print("40. Checkpoint")
     return stats_dict
 
 
@@ -696,8 +637,9 @@ if __name__ == "__main__":
         device = torch.device(f"cuda:{args.gpu}")
         torch.cuda.set_device(device)
     elif args.use_tpu:
-        print("Using TPU")
+        print("Selecting TPU..")
         device = xm.xla_device()
+        print(f"Using TPU {device}")
     else:
         print("Using CPU")
         device = torch.device("cpu")
@@ -833,25 +775,17 @@ if __name__ == "__main__":
             print(f"  New best model. Saving model in {args.save_dir}")
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
             state_dict = model_to_save.state_dict()
-            print("0.1. Main Checkpoint")
             # torch.save(state_dict, model_path)
             if xm.is_master_ordinal():
-                print("0.2. Main Checkpoint")
                 model.config.save_pretrained("save_dir/")
-            print("0.3. Main Checkpoint")
             xm.save(state_dict, model_path)
-            print("0.4. Main Checkpoint")
             best_score = score
             best_epoch = e
-            print("1. Main Checkpoint")
 
-            print("2. Main Checkpoint")
             # write + print summary stats
             report.write_epoch_scores(epoch = e, scores = stats_dict)
             report.print_epoch_scores(epoch = e, scores = stats_dict)
-            print("3. Main Checkpoint")
 
-        print("4. Main Checkpoint")
         end_time = time.time()
         training_time = (end_time-start_time) / 60
         unit = 'minutes' if training_time < 60 else 'hours'
@@ -861,12 +795,10 @@ if __name__ == "__main__":
 
     # FINAL EVAL
 
-    print("5. Main Checkpoint")
     model = load_model(args, device, tokenizer, multi_gpu = multi_gpu, finetuned_path = model_path)
     if multi_gpu:
         model = torch.nn.DataParallel(model)
 
-    print("6. Main Checkpoint")
     if args.do_eval:
         sample_exps = (not args.do_task and args.do_explain)
         print("\nGetting final eval results...\n")
@@ -902,10 +834,8 @@ if __name__ == "__main__":
             final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Dev BLEU: {dev_bleu:.2f}"
 
         if args.do_train:
-            print("7. Main Checkpoint")
             report.write_final_score(args, final_score_str = final_msg, time_msg = time_msg)
         report.print_epoch_scores(epoch = best_epoch, scores = {k:v for k,v in stats_dict.items() if 'train' not in k})
-        print("8. Main Checkpoint")
 
     # write predictions
     if args.write_predictions:
@@ -949,7 +879,6 @@ if __name__ == "__main__":
         print(time_msg)
 
         report.print_epoch_scores(epoch = -1, scores = stats_dict)
-        print("9. Main Checkpoint")
 
     ### END OF SCRIPT ###
 
