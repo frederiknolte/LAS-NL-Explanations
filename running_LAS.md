@@ -28,7 +28,7 @@ This section describes how to run the LAS model on LISA. [Running experiments on
 3. Now activate it and install the necessary packages:
     ```shell
     source activate cdm
-    pip install -r LAS/requirements.txt
+    pip install -r LAS-NL-Explanations/requirements.txt
     ```
 
 Now log out of LISA and log back in again.
@@ -104,7 +104,7 @@ This section describes how to run the LAS model on TPUs.
 
 6. Install the required packages:
    ```shell
-    pip install -r LAS/requirements.txt
+    pip install -r LAS-NL-Explanations/requirements.txt
     ```
 
 ### Starting the Training on TPU
