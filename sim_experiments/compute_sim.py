@@ -175,7 +175,6 @@ if __name__ == '__main__':
     parser.add_argument('--leaking_param', default = 0, type=float, help='')
     parser.add_argument('--split_name', default='dev', type=str, help='see get_sim_metric')
     parser.add_argument('--task_pretrained_name', default='t5-base', type=str, help='')
-    parser.add_argument('--server_number', '-s', default='13', type=str, help='')
     parser.add_argument('--bootstrap', action='store_true', help='')
     parser.add_argument('--use_tpu', action='store_true', help='')
     parser.add_argument('--small_data', action='store_true', help='Flag for using just a few datapoints for debugging purposes')

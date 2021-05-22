@@ -124,7 +124,7 @@ This section describes how to run the LAS model on TPUs.
 
 4. Start the training:
    ```shell
-   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir --cache_dir cache_dir --server_number 1 --model distilbert-base-cased --use_tpu
+   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir --cache_dir cache_dir --model distilbert-base-cased --use_tpu
     ```
    
 ### Evaluating LAS Scores on TPU

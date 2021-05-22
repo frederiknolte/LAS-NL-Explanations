@@ -24,6 +24,6 @@ cd $HOME/LAS-NL-Explanations/sim_experiments/
 source activate cdm
 
 # Run code
-srun python -u run_tasks.py --gpu 0 -e circa.NLI.SIM.ST.RE -b 1 -g 12 --save_dir save_dir --cache_dir cache_dir --server_number 1 --model t5-small
+srun python -u run_tasks.py --gpu 0 -e circa.NLI.SIM.ST.RE -b 1 -g 12 --save_dir save_dir --cache_dir cache_dir --model t5-small
 
 

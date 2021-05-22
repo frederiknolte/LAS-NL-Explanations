@@ -262,7 +262,6 @@ if __name__ == '__main__':
     parser.add_argument("--num_train_epochs", default=1, type=int, help='number of training epochs.')
     parser.add_argument('--use_tpu', action='store_true', help='use tpu for training.')
     parser.add_argument("--experiment", '-e', type=str, help='')
-    parser.add_argument("--server_number", '-s', required=True, type=str, help='')
     parser.add_argument("--model", default='t5-base', type=str, help='HuggingFace transformer model')
     parser.add_argument("--train_batch_size", '-b', default=3, type=int, help="ONLY FOR QA. Total batch size for training. Effective batch size is this times grad_accumulation_factor")
     parser.add_argument('--grad_accumulation_factor', '-g', type=int, default=4, help="ONLY FOR QA. Number of updates steps to accumulate before performing a backward pass and step.")
