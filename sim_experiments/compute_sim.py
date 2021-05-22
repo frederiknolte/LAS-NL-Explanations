@@ -51,7 +51,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations true --explanations_to_use {explanations_to_use} "
                   f"--dev_batch_size 20 "
-                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
+                  f"--use_tpu"
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix XE "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
@@ -59,7 +59,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         print("Writing X predictions...")
         os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations false --explanations_to_use {explanations_to_use} "
-                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
+                  f"--use_tpu"
                   f"--dev_batch_size 20 "
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix X "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
@@ -69,7 +69,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         os.system(f"python {script}.py --model_name {model_name} --do_explain false --task_pretrained_name {pretrained_name} --multi_explanation false "
                   f"--data_dir {folder} --condition_on_explanations true --explanations_to_use {explanations_to_use} --explanations_only true "
                   f"--dev_batch_size 20 "
-                  f"{('--gpu '+str(gpu)+' ') if gpu is not None else ''}"
+                  f"--use_tpu"
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix E "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
