@@ -162,6 +162,12 @@ def get_tensors_for_bert(args, examples, tokenizer, max_seq_length : int, condit
     for example_index, example in enumerate(examples):
         if example_index > args.small_size and args.small_data:
             break
+
+        explanation_str = example.explanation
+        if isNaN(explanation_str):
+            print("got nan explanation")
+            example.explanation = '__'
+
         # per-question variables
         premise = example.premise
         hypothesis = example.hypothesis        
@@ -194,7 +200,7 @@ def get_tensors_for_bert(args, examples, tokenizer, max_seq_length : int, condit
             input_str += f" My commonsense tells me {explanation_str} {tokenizer.sep_token}"
 
         explanation_context_str = f"My commonsense tells me that"
-        explanation_context_ids = tokenizer.encode(explanation_context_str, add_special_tokens = False)    
+        explanation_context_ids = tokenizer.encode(explanation_context_str, add_special_tokens = False)
         explanation_only_ids = tokenizer.encode(example.explanation, add_special_tokens = False)
         explanation_len = len(explanation_context_ids) + len(explanation_only_ids) 
 

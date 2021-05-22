@@ -11,6 +11,7 @@ import torch.nn as nn
 try:
     import torch_xla
     import torch_xla.core.xla_model as xm
+    import torch_xla.distributed.parallel_loader as pl
 except:
     print("Not loading torch-xla\n")
 
@@ -19,9 +20,8 @@ from torch.utils.data.distributed import DistributedSampler
 
 from models.T5ForMC import T5ModelForMC
 from transformers import T5Tokenizer, T5Config, AutoTokenizer, AutoConfig
-from transformers import RobertaForSequenceClassification, RobertaConfig, TFDistilBertForSequenceClassification, DistilBertConfig
+from transformers import RobertaForSequenceClassification, RobertaConfig, DistilBertForSequenceClassification, DistilBertConfig
 from transformers import AdamW, get_linear_schedule_with_warmup
-
 import utils, QA_data_utils, NLI_data_utils
 from utils import str2bool
 
@@ -37,7 +37,7 @@ def CE_Loss(probabilities, labels):
     pred_probs = probabilities.gather(-1, labels.unsqueeze(-1))
     return torch.mean(-torch.log(pred_probs))
 
-def load_data(args, data_name, tokenizer):
+def load_data(args, data_name, tokenizer, device):
     '''
     returns pytorch dataloaders for train and eval data
     '''
@@ -51,7 +51,7 @@ def load_data(args, data_name, tokenizer):
         elif 'bert' in args.task_pretrained_name:
             prep_function = QA_data_utils.get_tensors_for_bert
         extension = 'csv'
-    if data_name == 'NLI':        
+    if data_name == 'NLI':
         read_function = NLI_data_utils.read_NLI
         if 't5' in args.task_pretrained_name:
             prep_function = NLI_data_utils.get_tensors_for_T5_split
@@ -67,18 +67,18 @@ def load_data(args, data_name, tokenizer):
         extension = 'csv'
 
     train_examples = read_function(args,
-                            input_file = os.path.join(args.data_dir, 'train.%s' % extension), 
-                            explanations_to_use = args.explanations_to_use, 
+                            input_file = os.path.join(args.data_dir, 'train.%s' % extension),
+                            explanations_to_use = args.explanations_to_use,
                             labels_to_use = args.labels_to_use,
                             version = version)
     dev_examples = read_function(args,
-                            input_file = os.path.join(args.data_dir, 'dev.%s' % extension), 
-                            explanations_to_use = args.explanations_to_use, 
+                            input_file = os.path.join(args.data_dir, 'dev.%s' % extension),
+                            explanations_to_use = args.explanations_to_use,
                             labels_to_use = args.labels_to_use,
                             version = version)
     test_examples = read_function(args,
-                            input_file = os.path.join(args.data_dir, 'test.%s' % extension), 
-                            explanations_to_use = args.explanations_to_use, 
+                            input_file = os.path.join(args.data_dir, 'test.%s' % extension),
+                            explanations_to_use = args.explanations_to_use,
                             labels_to_use = None if (data_name=='QA' and args.labels_to_use == 'label') else args.labels_to_use,
                             version = version)
 
@@ -87,35 +87,39 @@ def load_data(args, data_name, tokenizer):
         dev_examples = train_examples
 
     # convert examples to lists of tensors, and put into TensorDatasets then dataloaders. use_explanations is flag for excluded explanations in inputs
-    train_tensors = prep_function(args, examples = train_examples, 
-                                            tokenizer = tokenizer, 
-                                            max_seq_length = args.max_seq_length, 
+    train_tensors = prep_function(args, examples = train_examples,
+                                            tokenizer = tokenizer,
+                                            max_seq_length = args.max_seq_length,
                                             condition_on_explanations = args.condition_on_explanations,
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
-    train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=True, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 2, pin_memory = True, drop_last=True)
-    sequential_train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=False, batch_size=args.dev_batch_size, 
-                num_workers = 2, pin_memory = True, drop_last=True)
-    
-    dev_tensors = prep_function(args, examples = dev_examples, 
-                                            tokenizer = tokenizer, 
-                                            max_seq_length = args.max_seq_length, 
+    train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=True, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size,
+                num_workers = 2, pin_memory = True)
+    sequential_train_dataloader = DataLoader(TensorDataset(*train_tensors), shuffle=False, batch_size=args.dev_batch_size,
+                num_workers = 2, pin_memory = True)
+
+    dev_tensors = prep_function(args, examples = dev_examples,
+                                            tokenizer = tokenizer,
+                                            max_seq_length = args.max_seq_length,
                                             condition_on_explanations = args.condition_on_explanations,
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
-    dev_dataloader = DataLoader(TensorDataset(*dev_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 2, pin_memory = True, drop_last=True)
-    
-    test_tensors = prep_function(args, examples = test_examples, 
-                                            tokenizer = tokenizer, 
-                                            max_seq_length = args.max_seq_length, 
+    dev_dataloader = DataLoader(TensorDataset(*dev_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size,
+                num_workers = 2, pin_memory = True)
+
+    test_tensors = prep_function(args, examples = test_examples,
+                                            tokenizer = tokenizer,
+                                            max_seq_length = args.max_seq_length,
                                             condition_on_explanations = args.condition_on_explanations,
                                             multi_explanation = args.multi_explanation,
                                             explanations_only = args.explanations_only)
-    test_dataloader = DataLoader(TensorDataset(*test_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size, 
-                num_workers = 2, pin_memory = True, drop_last=True)
-    
+    test_dataloader = DataLoader(TensorDataset(*test_tensors), shuffle=False, batch_size=args.train_batch_size if args.do_train else args.dev_batch_size,
+                num_workers = 2, pin_memory = True)
+
+    train_dataloader = pl.MpDeviceLoader(train_dataloader, device)
+    dev_dataloader = pl.MpDeviceLoader(dev_dataloader, device)
+    test_dataloader = pl.MpDeviceLoader(test_dataloader, device)
+    sequential_train_dataloader = pl.MpDeviceLoader(sequential_train_dataloader, device)
     return train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader
 
 
@@ -126,20 +130,18 @@ def load_model(args, device, tokenizer, multi_gpu = True, finetuned_path = None)
         print(f"\nLoading fine-tuned model: {finetuned_path}...")
 
     if 'bert' in args.task_pretrained_name:
-        config = DistilBertConfig.from_pretrained(args.task_pretrained_name, num_labels=3)
-        model = TFDistilBertForSequenceClassification.from_pretrained(args.task_pretrained_name, config=config, cache_dir = args.cache_dir)
+        config = DistilBertConfig.from_pretrained(args.task_pretrained_name, num_labels=4)
+        model = DistilBertForSequenceClassification.from_pretrained(args.task_pretrained_name, config=config, cache_dir = args.cache_dir)
 
     if 't5' in args.task_pretrained_name:
         model_class = T5ModelForMC
-        model = model_class.from_pretrained(args.task_pretrained_name, 
-            project_to_small=False,
-            cache_dir = args.cache_dir)
+        model = model_class.from_pretrained(args.task_pretrained_name, cache_dir = args.cache_dir)
         model.resize_token_embeddings(len(tokenizer))
         model.set_input_embeddings(model.shared)
-        
+
     if finetuned_path is not None:
         model_state_dict = torch.load(finetuned_path, map_location=lambda storage, loc: storage) # args for preventing memory leakage across gpus
-        model.load_state_dict(model_state_dict)    
+        model.load_state_dict(model_state_dict)
         del model_state_dict
 
     model.to(device)
@@ -154,14 +156,14 @@ def prepare_optimizer(args, model, num_train_optimization_steps):
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-    optimizer = AdamW(optimizer_grouped_parameters, 
-                      lr=args.lr, 
-                      correct_bias=True) 
+    optimizer = AdamW(optimizer_grouped_parameters,
+                      lr=args.lr,
+                      correct_bias=True)
     return optimizer
 
 
-def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu, 
-                model, optimizer, scheduler, tokenizer, 
+def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
+                model, optimizer, scheduler, tokenizer,
                 sample_exps, split_name, write_predictions = False):
     '''runs one epoch. returns stats_dict. updates model parameters if training'''
     is_train = (split_name == 'train' and not write_predictions)
@@ -234,7 +236,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
             #     print(tokenizer.decode(task_input, skip_special_tokens=True))
             # import ipdb; ipdb.set_trace()
         if args.input_dropout > 0 and allow_dropout:
-            num_to_dropout = int(args.input_dropout * batch_size)            
+            num_to_dropout = int(args.input_dropout * batch_size)
             # if combining with explanation_dropout, never dropout both x and e for a data point
             if args.explanation_dropout > 0:
                 eligible_idx = np.setdiff1d(np.arange(batch_size),dropout_idx)
@@ -262,146 +264,112 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
         grad_req = torch.enable_grad() if is_train else torch.no_grad()
         with grad_req:
 
-            if args.do_task:                
+            if args.do_task:
                 if 't5' in args.task_pretrained_name and not ST_RA:
-                    print("1. Checkpoint")
-                    outputs = model(input_ids = task_input_ids, 
-                                attention_mask = task_input_masks)
-                    print("2. Checkpoint")
+                    outputs = model(
+                        input_ids = task_input_ids,
+                        attention_mask = task_input_masks)
                     encoder_hidden_states = outputs[1]
                     outputs = model(encoder_hidden_states = encoder_hidden_states,
                                     encoder_attention_mask = task_input_masks,
-                                    decoder_input_ids = task_answer_ids, 
-                                    decoder_lm_labels = task_answer_labels, 
+                                    decoder_input_ids = task_answer_ids,
+                                    decoder_lm_labels = task_answer_labels,
                                     decoder_attention_mask = task_answer_masks)
-                    print("3. Checkpoint")
-                    task_loss = outputs[0] / args.grad_accumulation_factor 
-                    choice_losses = None                
-                    # now get likelihoods for each choice 
+                    task_loss = outputs[0] / args.grad_accumulation_factor
+                    choice_losses = None
+                    # now get likelihoods for each choice
                     with torch.no_grad():
                         # add num_choices dim to input_masks and encoder_hidden_states and expand to match task_output_ids shape
                         expand_shape = list(encoder_hidden_states.shape)
                         expand_shape.insert(1, num_choices)
                         encoder_hidden_states = encoder_hidden_states.unsqueeze(1).expand(expand_shape)
                         task_input_masks = task_input_masks.unsqueeze(1).expand_as(task_output_masks)
-                        print("4. Checkpoint")
 
-                        outputs = model(encoder_hidden_states = encoder_hidden_states, 
+                        outputs = model(encoder_hidden_states = encoder_hidden_states,
                                                 encoder_attention_mask = task_input_masks,
-                                                decoder_input_ids = task_output_ids, 
-                                                decoder_lm_labels = task_output_labels, 
+                                                decoder_input_ids = task_output_ids,
+                                                decoder_lm_labels = task_output_labels,
                                                 decoder_attention_mask = task_output_masks)
                         # choice_losses is of shape: batch_size x num_choices, because task_output_ids had a num_choices dim
-                        print("5. Checkpoint")
                         choice_losses = outputs[0]
                 elif 't5' in args.task_pretrained_name and ST_RA:
                     batch_shape = list(task_input_ids.shape)
                     task_input_ids = task_input_ids.view(-1,task_input_ids.size(-1))
                     task_input_masks = task_input_masks.view(-1,task_input_ids.size(-1))
-                    outputs = model(input_ids = task_input_ids, 
+                    outputs = model(input_ids = task_input_ids,
                                             attention_mask = task_input_masks)
-                    encoder_hidden_states = outputs[1]       
+                    encoder_hidden_states = outputs[1]
                     # reshape inputs
                     task_input_ids = task_input_ids.view(batch_shape)
-                    task_input_masks = task_input_masks.view(batch_shape)                
+                    task_input_masks = task_input_masks.view(batch_shape)
                     batch_shape.append(encoder_hidden_states.size(-1))
                     encoder_hidden_states = encoder_hidden_states.view(batch_shape)
-                    outputs = model(encoder_hidden_states = encoder_hidden_states, 
+                    outputs = model(encoder_hidden_states = encoder_hidden_states,
                                 encoder_attention_mask = task_input_masks,
-                                decoder_input_ids = task_output_ids, 
-                                decoder_lm_labels = task_output_labels, 
+                                decoder_input_ids = task_output_ids,
+                                decoder_lm_labels = task_output_labels,
                                 decoder_attention_mask = task_output_masks)
                     choice_losses = outputs[0] # choice_losses is of shape: batch_size x num_choices
                     choice_probs = nn.functional.softmax(-choice_losses, dim=-1)
                     task_loss = utils.CE_Loss(choice_probs, task_choice_labels) / args.grad_accumulation_factor
                 elif 'bert' in args.task_pretrained_name:
-                    outputs = model(input_ids = task_input_ids, 
-                            attention_mask = task_input_masks,
-                            labels = task_choice_labels)
-                    choice_losses = -outputs[1] # negative logits, preds gotten by argmin
-                    task_loss = outputs[0] / args.grad_accumulation_factor 
-                    # print(task_loss)
+                    outputs = model(
+                        input_ids = task_input_ids,
+                        attention_mask = task_input_masks,
+                        labels = task_choice_labels
+                    )
+                    choice_losses = -outputs.logits
+                    task_loss = outputs.loss / args.grad_accumulation_factor
 
-                # print("5.1. Checkpoint")
-                # # compute task accuracy
-                # labels = task_choice_labels.detach().cpu().numpy()
-                # # choice_losses = choice_losses.detach().cpu().numpy()
-                # preds = np.argmin(choice_losses.detach().cpu().numpy(), axis=-1)
-                # n_correct = np.sum(preds==labels)
-                # acc_sum += n_correct
-                # preds_list.extend(preds.tolist())
-                # print("5.2. Checkpoint")
-
-                print("5.1. Checkpoint")
                 # compute task accuracy
-                labels = task_choice_labels.detach()
-                print("5.2. Checkpoint")
+                labels = task_choice_labels.detach().cpu().numpy()
                 # choice_losses = choice_losses.detach().cpu().numpy()
-                preds = torch.argmin(choice_losses.detach(), dim=-1)
-                print("5.3. Checkpoint")
-                n_correct = torch.sum(torch.eq(preds, labels).int())
-                print("5.4. Checkpoint")
+                preds = np.argmin(choice_losses.detach().cpu().numpy(), axis=-1)
+                n_correct = np.sum(preds==labels)
                 acc_sum += n_correct
-                print("5.5. Checkpoint")
-                preds_list.append(preds)
-                print("5.6. Checkpoint")
+                preds_list.extend(preds.tolist())
 
                 # get pred probs
                 choice_probs = nn.functional.softmax(-choice_losses.detach(), dim=-1)
-                print("5.7. Checkpoint")
-                # label_probs = [choice_probs[i,label].item() for i, label in enumerate(labels)]
-                label_probs = torch.gather(choice_probs, 1, labels.unsqueeze(1))
-                print("5.8. Checkpoint")
-                label_probs_list.append(label_probs)
-                print("5.9. Checkpoint")
+                label_probs = [choice_probs[i, label].item() for i, label in enumerate(labels)]
+                label_probs_list.extend(label_probs)
 
             if args.do_explain:
-                print("6. Checkpoint")
                 outputs = model(input_ids = explanation_input_ids,
                                 encoder_attention_mask = explanation_input_masks,
-                                decoder_input_ids = explanation_output_ids, 
-                                decoder_lm_labels = explanation_output_labels, 
+                                decoder_input_ids = explanation_output_ids,
+                                decoder_lm_labels = explanation_output_labels,
                                 decoder_attention_mask = explanation_output_masks)
                 explanation_loss = outputs[0] / args.grad_accumulation_factor
                 encoder_hidden_states = outputs[2]
-                print("7. Checkpoint")
 
             if multi_gpu:
                 task_loss = task_loss.mean()
                 explanation_loss = explanation_loss.mean()
 
             # BACKWARD
-            if is_train:         
+            if is_train:
                 loss = (args.task_coef * task_loss if args.do_task else 0) + \
                       ((1 - args.task_coef) * explanation_loss if args.do_explain else 0)
                 if args.fp16:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
                 else:
-                    print("8. Checkpoint")
-                    loss.backward()                        
+                    loss.backward()
                 # step
-                print("9. Checkpoint")
                 if (step+1) % args.grad_accumulation_factor == 0:
-                    print("10. Checkpoint")
                     if args.fp16:
                         torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
                     else:
                         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                    print("11. Checkpoint")
                     xm.optimizer_step(optimizer)
-                    print("12. Checkpoint")
                     scheduler.step()
-                    print("13. Checkpoint")
                     optimizer.zero_grad()
-                    print("14. Checkpoint")
                     n_steps += 1
-                    # print("stepping!")     
-                print("15. Checkpoint")
+                    # print("stepping!")
 
             # explanation sampling. sample when do_explain is true and either writing predictions or evaluating
             if sample_exps:
-                print("16. Checkpoint")
                 if args.do_task: # get predicted contexts
                     use_contexts = torch.stack(
                             [explanation_context_ids[i, preds[i], :] for i in range(batch_size)], dim = 0
@@ -414,11 +382,10 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     use_contexts = explanation_context_ids
                 elif not args.multi_explanation: # take an arbitrary context for each data point (all the same)
                     use_contexts = explanation_context_ids[:,0,:]
-                print("17. Checkpoint")
 
                 # sample
                 reshape = False
-                if use_contexts.dim() == 3:               
+                if use_contexts.dim() == 3:
                     first_two_dims = list(use_contexts.shape)[:2]
                     explanation_input_masks = explanation_input_masks.unsqueeze(1).expand_as(use_contexts)
                     expand_shape = list(encoder_hidden_states.shape)
@@ -428,17 +395,14 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     encoder_hidden_states = encoder_hidden_states.reshape(-1, encoder_hidden_states.size(-2), encoder_hidden_states.size(-1))
                     explanation_input_masks = explanation_input_masks.reshape(-1, explanation_input_masks.size(-1))
                     reshape = True
-                print("18. Checkpoint")
-                samples = utils.T5_sample(model, 
+                samples = utils.T5_sample(model,
                     encoder_hidden_states=encoder_hidden_states,
                     decoder_input_ids=use_contexts,
-                    encoder_attention_mask=explanation_input_masks, 
-                    tokenizer=tokenizer, 
+                    encoder_attention_mask=explanation_input_masks,
+                    tokenizer=tokenizer,
                     max_sample_len=args.max_sample_len)
-                print("19. Checkpoint")
                 if reshape:
                     samples = samples.view(first_two_dims + [samples.size(-1)])
-                print("20. Checkpoint")
                 if not args.do_task and args.multi_explanation and write_predictions: # condition where three are sampled per item
                     pred_explanations = [question[task_choice_labels[i].item()] for i, question in enumerate(samples.tolist())]
                     batch_multi_sample_strs = utils.detok_batch(tokenizer, samples,
@@ -447,22 +411,19 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     multi_sample_strs.extend(batch_multi_sample_strs)
                 else:
                     pred_explanations = samples.squeeze(1).tolist()
-                print("21. Checkpoint")
                 # detokenize expl. labels and predictions
-                batch_label_strs = utils.detok_batch(tokenizer, explanation_only_ids, 
+                batch_label_strs = utils.detok_batch(tokenizer, explanation_only_ids,
                                                 ignore_tokens = ignore_tokens_list)
-                batch_sample_strs = utils.detok_batch(tokenizer, pred_explanations, 
+                batch_sample_strs = utils.detok_batch(tokenizer, pred_explanations,
                                                 ignore_tokens = ignore_tokens_list,
                                                 eos_token = tokenizer.eos_token)
                 label_strs.extend(batch_label_strs)
                 sample_strs.extend(batch_sample_strs)
-            print("22. Checkpoint")
             # track stats
             task_loss_sum += task_loss
             explanation_loss_sum += explanation_loss
             n_data_points += batch_size
 
-            print("23. Checkpoint")
 
             # clean up
             if is_train:
@@ -471,11 +432,10 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 if args.do_explain: del explanation_loss
                 del batch, outputs
 
-            print("24. Checkpoint")
 
         elapsed_time = (time.time() - start_time) / 60
-        print(f"Elapsed time: {elapsed_time:1.2f} minutes")
-                
+        # print(f"Elapsed time: {elapsed_time:1.2f} minutes")
+
     # print examples
     if args.print_examples:
         print(f"\nEXAMPLE {split_name.upper()} INPUTS")
@@ -497,8 +457,8 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     for j in range(num_choices):
                         print(f"context {j}: ", tokenizer.decode(explanation_context_ids[i][j]))
                         print(f"sample {j}:", batch_multi_sample_strs[i][j])
-                    import ipdb; ipdb.set_trace() 
-                print("context (bleu):", used_contexts[i])                
+                    import ipdb; ipdb.set_trace()
+                print("context (bleu):", used_contexts[i])
                 print("sample (bleu):", batch_sample_strs[i])
             print()
 
@@ -511,9 +471,9 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     if args.do_task:
         if split_name != 'test': stats.update({f'{split_name}_task_loss' : task_loss_mean})
         stats.update({f'{split_name}_acc' : acc_mean * 100})
-    if args.do_explain:        
-        if split_name != 'test': 
-            explanation_loss_mean = explanation_loss_sum / n_batches        
+    if args.do_explain:
+        if split_name != 'test':
+            explanation_loss_mean = explanation_loss_sum / n_batches
             stats.update({f'{split_name}_exp_loss' : explanation_loss_mean})
         if sample_exps:
             print(f"compute bleu: split_name={split_name}, len(sample_strs)={len(sample_strs)}")
@@ -525,46 +485,37 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     print(f"\n  {split_name.capitalize()} total time: {run_time:1.2f} minutes")
 
     if write_predictions:
-        print("25. Checkpoint")
         extension = 'tsv' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else 'csv'
         delimiter = '\t' if ('NLI' in args.data_dir and not 'circa' in args.data_dir) else ','
- 
+
         if args.do_task:
-            print("26. Checkpoint")
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
             df = pd.read_csv(df_path, sep=delimiter)
             n = len(df)
             new_col_name = f'preds_{save_name}' if args.preds_suffix is None else f'preds_{save_name}_{args.preds_suffix}'
+            print(f"type(preds_list): {type(preds_list)}")
             while len(preds_list) < n:
                 preds_list.append('N/A')
             df[new_col_name] = preds_list
-            print("27. Checkpoint")
             if 'sim' in args.model_name.lower():
-                print("28. Checkpoint")
                 new_col_name = f'label_probs_{save_name}' if args.preds_suffix is None else f'label_probs_{save_name}_{args.preds_suffix}'
                 while len(label_probs_list) < n:
                     label_probs_list.append('N/A')
                 df[new_col_name] = label_probs_list
-                print("29. Checkpoint")
             df.to_csv(df_path, index = False, sep = delimiter)
-            print("30. Checkpoint")
 
         if args.do_explain:
-            print("31. Checkpoint")
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
             df = pd.read_csv(df_path,sep=delimiter)
             n = len(df)
 
             if args.multi_explanation and args.do_task:
-                print("32. Checkpoint")
                 col_name = f't5-MT-multi-exp-pred-seed{args.seed}' if not args.save_agent else 't5-agent-ra-exp'
                 while len(sample_strs) < n:
                     sample_strs.append('N/A')
                 df[col_name] = sample_strs
-                print("33. Checkpoint")
 
             if args.multi_explanation and not args.do_task:
-                print("34. Checkpoint")
                 explanations = np.array(multi_sample_strs)
                 exp_cols = [f't5-multi-exp-{i}-seed{args.seed}' for i in range(num_choices)]
                 for j, col_name in enumerate(exp_cols):
@@ -572,33 +523,27 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     while len(new_col) < n:
                         new_col.append('N/A')
                     df[col_name] = new_col
-                print("35. Checkpoint")
-            
+
             if not args.multi_explanation:
-                print("36. Checkpoint")
                 if args.do_task:
                     col_name = f't5-MT-single-exp-seed{args.seed}'  if not args.save_agent else 't5-agent-re-exp'
                 else:
-                    col_name = f't5-single-exp-seed{args.seed}' 
+                    col_name = f't5-single-exp-seed{args.seed}'
 
                 while len(sample_strs) < n:
                     sample_strs.append('N/A')
-                print("37. Checkpoint")
                 df[col_name] = sample_strs
 
-            print("38. Checkpoint")
             df.to_csv(df_path, index = False, sep=delimiter)
-            print("39. Checkpoint")
 
-    print("40. Checkpoint")
     return stats_dict
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # model args
-    parser.add_argument("--task_pretrained_name", default='t5-base', type=str, help='HuggingFace transformer model')    
-    parser.add_argument("--max_seq_length", default=175, type=int, help="The maximum total input sequence length after WordPiece tokenization. \n"
+    parser.add_argument("--task_pretrained_name", default='t5-base', type=str, help='HuggingFace transformer model')
+    parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after WordPiece tokenization. \n"
                                                                      "Sequences longer than this will be truncated, and sequences shorter \n"
                                                                      "than this will be padded.")
     # hyperparams
@@ -611,7 +556,7 @@ if __name__ == "__main__":
                                                                             "E.g., 0.1 = 10%% of training.")
     parser.add_argument('--max_grad_norm', type=int, default=1)
     parser.add_argument("--task_coef", default=1, type=float, help="Coefficient for task loss.")
-    parser.add_argument('--max_sample_len', type = int, default = 175, help = 'Maximum num tokens that can appear in generated explanation')    
+    parser.add_argument('--max_sample_len', type = int, default = 360, help = 'Maximum num tokens that can appear in generated explanation')
     # gpu + distributed + half-precision training
     parser.add_argument('--gpu', type = int, default = None, help = 'gpu id to use. -1 corresponds to multi-gpu')
     parser.add_argument('--use_tpu', action='store_true', help='use tpu.')
@@ -643,7 +588,7 @@ if __name__ == "__main__":
                            help = "Load name for model to start training with.")
     # debug flags
     parser.add_argument('--small_data', '-s', action='store_true', help='Flag for using just a few datapoints for debugging purposes')
-    parser.add_argument("--small_size", '-ss', default=100, type=int, help = "")  
+    parser.add_argument("--small_size", '-ss', default=100, type=int, help = "")
     # experiment condition flags
     parser.add_argument("--condition_on_explanations", default = False, type = str2bool,
                                 help="Whether or not to condition on explanations in input")
@@ -656,7 +601,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_explain", default = True, type=str2bool,  help="Do LM")
     parser.add_argument("--select_for", default = 'acc', type=str, choices=['acc', 'bleu'],  help="Select model based on acc or bleu")
     parser.add_argument("--multi_explanation", default = True, type=str2bool,  help="Generate an explanation for each answer choice")
-    parser.add_argument("--leaking_weight", default = -1, type=int,  
+    parser.add_argument("--leaking_weight", default = -1, type=int,
                         help="Used if > 0 and conditioning on exps. Weight loss by whether exps leak labels. More heavily weight non-leaking examples")
     parser.add_argument("--leakage_predictor", default = None, type=str, help="Model y|e whose correctness indicates explanations leak label")
     parser.add_argument("--explanation_dropout", default = 0, type=float, help="When condition_on_explanations, proportion of exps to dropout from inputs")
@@ -665,20 +610,20 @@ if __name__ == "__main__":
     # control flow for script
     parser.add_argument("--do_train", default = True, type=str2bool, help="Whether to run training.")
     parser.add_argument("--save_agent", default = False, type=str2bool, help="Whether to run training.")
-    parser.add_argument("--do_eval", default = True, type=str2bool, help="Whether to run final eval on dev and test sets.")    
+    parser.add_argument("--do_eval", default = True, type=str2bool, help="Whether to run final eval on dev and test sets.")
     parser.add_argument("--eval_on_train",  default = False, action='store_true', help="Whether to run eval on the train data.")
     parser.add_argument('--write_predictions', action='store_true', default = False, help = 'Write predictions in data file')
-    parser.add_argument("--load_epoch", default=0, type=int, help = "Epoch to effectively start at.")  
+    parser.add_argument("--load_epoch", default=0, type=int, help = "Epoch to effectively start at.")
     parser.add_argument('--pre_eval', action='store_true', default = False, help = 'Evaluate model once before training')
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    
+
     # check argparse arguments. some argument settings don't make sense together
-    args = parser.parse_args()    
+    args = parser.parse_args()
     assert args.do_task + args.do_explain >= 1, "Don't do nothing"
     assert not (args.do_explain and args.task_coef == 1) or not args.do_train, \
         "If explaining, use args.task_coef < 1 which implies explain_coef > 0"
-    
+
     # GPU + SEED set-up
     n_gpu = torch.cuda.device_count()
     multi_gpu = (n_gpu > 1 and args.gpu == -1) # i.e. multiple gpus available and gpu choice not specified
@@ -692,8 +637,9 @@ if __name__ == "__main__":
         device = torch.device(f"cuda:{args.gpu}")
         torch.cuda.set_device(device)
     elif args.use_tpu:
-        print("Using TPU")
+        print("Selecting TPU..")
         device = xm.xla_device()
+        print(f"Using TPU {device}")
     else:
         print("Using CPU")
         device = torch.device("cpu")
@@ -731,7 +677,7 @@ if __name__ == "__main__":
 
     print("Starting experiment with save_name: %s" % save_name)
 
-    model_path = os.path.join(args.save_dir, save_name + ".hdf5")    
+    model_path = os.path.join(args.save_dir, save_name + ".hdf5")
     prefinetuned_name = f"{data_name}_{args.task_pretrained_name}_{args.prefinetuned_name}"
     prefinetuned_path = os.path.join(args.save_dir, prefinetuned_name + ".hdf5") if args.prefinetuned_name != '' else None
     if not os.path.exists(args.save_dir): os.makedirs(args.save_dir)
@@ -741,42 +687,41 @@ if __name__ == "__main__":
     report_name = f"report_{save_name}.txt"
     report_file = os.path.join(args.report_dir, report_name)
     if args.do_task and not args.do_explain:
-        score_names = ['train_task_loss','train_acc','dev_task_loss','dev_acc','test_task_loss','test_acc'] 
+        score_names = ['train_task_loss','train_acc','dev_task_loss','dev_acc','test_task_loss','test_acc']
     elif args.do_explain and not args.do_task:
-        score_names = ['train_exp_loss','dev_exp_loss','dev_bleu','test_bleu'] 
+        score_names = ['train_exp_loss','dev_exp_loss','dev_bleu','test_bleu']
     else:
         score_names = ['train_task_loss','train_acc','train_exp_loss',
                        'dev_task_loss','dev_acc','dev_exp_loss','dev_bleu',
-                       'test_acc','test_bleu'] 
+                       'test_acc','test_bleu']
     report = Report(args, report_file, score_names = score_names)
     stats_dict = {}
 
     # LOAD TOKENIZER(s). note T5 tokenizer had pad and eos tokens by default
-    tokenizer = AutoTokenizer.from_pretrained(args.task_pretrained_name, cache_dir = args.cache_dir)        
+    tokenizer = AutoTokenizer.from_pretrained(args.task_pretrained_name, cache_dir = args.cache_dir)
 
     # LOAD DATA
     print("Loading data...")
-    train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader = load_data(args, data_name, tokenizer)
-    print(f"Data set sizes: \n Train: {len(train_dataloader.dataset)} \n Eval: {len(dev_dataloader.dataset)} \n Test: {len(test_dataloader.dataset)}")
+    train_dataloader, dev_dataloader, test_dataloader, sequential_train_dataloader = load_data(args, data_name, tokenizer, device)
 
     # flag so that model loaded before debug flag
     if args.do_train:
 
         # LOAD MODEL
-        model = load_model(args, device, tokenizer, multi_gpu = multi_gpu, finetuned_path = prefinetuned_path)    
-        
+        model = load_model(args, device, tokenizer, multi_gpu = multi_gpu, finetuned_path = prefinetuned_path)
+
         # LOAD OPTIMIZER
-        num_train_optimization_steps = args.num_train_epochs * int(len(train_dataloader.dataset) / args.train_batch_size / args.grad_accumulation_factor)
+        num_train_optimization_steps = args.num_train_epochs * int(len(train_dataloader._loader.dataset) / args.train_batch_size / args.grad_accumulation_factor)
         optimizer = prepare_optimizer(args, model = model, num_train_optimization_steps = num_train_optimization_steps)
-        
+
         # mixed precision version of models + optimizers
         if args.fp16:
             model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
-            
+
         # MAKE SCHEDULERS -- needs to occur after amp.initialize due to https://discuss.pytorch.org/t/cyclic-learning-rate-how-to-use/53796
-        scheduler = get_linear_schedule_with_warmup(optimizer, 
-                                                num_warmup_steps= int(args.warmup_proportion * num_train_optimization_steps), 
-                                                num_training_steps=num_train_optimization_steps)        
+        scheduler = get_linear_schedule_with_warmup(optimizer,
+                                                num_warmup_steps= int(args.warmup_proportion * num_train_optimization_steps),
+                                                num_training_steps=num_train_optimization_steps)
 
         # models to multi_gpu (needs to follow mixed-precision)
         if multi_gpu:
@@ -787,12 +732,12 @@ if __name__ == "__main__":
         import ipdb; ipdb.set_trace()
 
     if args.pre_eval:
-        stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu, 
+        stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu,
                        model = model,
-                       optimizer = None, 
-                       scheduler = None, 
+                       optimizer = None,
+                       scheduler = None,
                        tokenizer = tokenizer,
-                       sample_exps = False, 
+                       sample_exps = False,
                        split_name = 'dev')
         report.print_epoch_scores(epoch = -1, scores = stats_dict)
         stats_dict = {}
@@ -809,46 +754,38 @@ if __name__ == "__main__":
             print(f"Epoch {e}")
             print("LR: %.6f" % optimizer.param_groups[0]['lr'])
 
-            stats_dict = train_or_eval_epoch(args, device, train_dataloader, stats_dict, multi_gpu = multi_gpu, 
-                                    model = model, 
-                                    optimizer = optimizer, 
-                                    scheduler = scheduler, 
+            stats_dict = train_or_eval_epoch(args, device, train_dataloader, stats_dict, multi_gpu = multi_gpu,
+                                    model = model,
+                                    optimizer = optimizer,
+                                    scheduler = scheduler,
                                     tokenizer = tokenizer,
                                     sample_exps = False,
                                     split_name = 'train')
-            stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu, 
-                                   model = model, 
-                                   optimizer = None, 
-                                   scheduler = None, 
+            stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu,
+                                   model = model,
+                                   optimizer = None,
+                                   scheduler = None,
                                    tokenizer = tokenizer,
                                    sample_exps = (not args.do_task and args.do_explain),
                                    split_name = 'dev')
-            score = stats_dict['dev_' + args.select_for]        
-                
+            score = stats_dict['dev_' + args.select_for]
+
             # check for best dev score and save if new best
             # if score[0] > best_score[0]:
             print(f"  New best model. Saving model in {args.save_dir}")
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
             state_dict = model_to_save.state_dict()
-            print("0.1. Main Checkpoint")
             # torch.save(state_dict, model_path)
             if xm.is_master_ordinal():
-                print("0.2. Main Checkpoint")
                 model.config.save_pretrained("save_dir/")
-            print("0.3. Main Checkpoint")
             xm.save(state_dict, model_path)
-            print("0.4. Main Checkpoint")
             best_score = score
             best_epoch = e
-            print("1. Main Checkpoint")
 
-            print("2. Main Checkpoint")
             # write + print summary stats
             report.write_epoch_scores(epoch = e, scores = stats_dict)
             report.print_epoch_scores(epoch = e, scores = stats_dict)
-            print("3. Main Checkpoint")
 
-        print("4. Main Checkpoint")
         end_time = time.time()
         training_time = (end_time-start_time) / 60
         unit = 'minutes' if training_time < 60 else 'hours'
@@ -858,84 +795,81 @@ if __name__ == "__main__":
 
     # FINAL EVAL
 
-    print("5. Main Checkpoint")
-    model = load_model(args, device, tokenizer, multi_gpu = multi_gpu, finetuned_path = model_path)    
+    model = load_model(args, device, tokenizer, multi_gpu = multi_gpu, finetuned_path = model_path)
     if multi_gpu:
         model = torch.nn.DataParallel(model)
 
-    print("6. Main Checkpoint")
     if args.do_eval:
         sample_exps = (not args.do_task and args.do_explain)
         print("\nGetting final eval results...\n")
-        stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu, 
-                               model = model, 
-                               optimizer = None, 
-                               scheduler = None, 
-                               tokenizer = tokenizer, 
+        stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu,
+                               model = model,
+                               optimizer = None,
+                               scheduler = None,
+                               tokenizer = tokenizer,
                                sample_exps = sample_exps,
                                split_name = 'dev')
         if data_name != 'QA' or args.labels_to_use != 'label':
-            stats_dict = train_or_eval_epoch(args, device, test_dataloader, stats_dict, multi_gpu = multi_gpu, 
-                               model = model, 
-                               optimizer = None, 
-                               scheduler = None, 
+            stats_dict = train_or_eval_epoch(args, device, test_dataloader, stats_dict, multi_gpu = multi_gpu,
+                               model = model,
+                               optimizer = None,
+                               scheduler = None,
                                tokenizer = tokenizer,
                                sample_exps = sample_exps,
                                split_name = 'test')
-        
+
         # print and write final stats2
         dev_acc, test_acc, dev_bleu, test_bleu = -1, -1, -1, -1
         if data_name != 'QA' or args.labels_to_use != 'label': # CQA does not have test labels. so compute test on other datasets and CQA simulation
             if args.do_task:
-                dev_acc = stats_dict['dev_acc']        
-                test_acc = stats_dict['test_acc']
+                dev_acc = stats_dict['dev_acc'].detach().cpu().numpy()[0]
+                test_acc = stats_dict['test_acc'].detach().cpu().numpy()[0]
             if sample_exps:
-                dev_bleu = stats_dict['dev_bleu']
-                test_bleu = stats_dict['test_bleu']
+                dev_bleu = stats_dict['dev_bleu'].detach().cpu().numpy()[0]
+                test_bleu = stats_dict['test_bleu'].detach().cpu().numpy()[0]
             final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Test acc: {test_acc:.2f} | Dev BLEU: {dev_bleu:.2f} | Test BLEU: {test_bleu:.2f}"
         else:
-            if args.do_task: dev_acc = stats_dict['dev_acc']
-            if sample_exps: dev_bleu = stats_dict['dev_bleu']
-            final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Dev BLEU: {dev_bleu:.2f}"    
+            if args.do_task: dev_acc = stats_dict['dev_acc'].detach().cpu().numpy()[0]
+            if sample_exps: dev_bleu = stats_dict['dev_bleu'].detach().cpu().numpy()[0]
+            final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Dev BLEU: {dev_bleu:.2f}"
+
         if args.do_train:
-            print("7. Main Checkpoint")
             report.write_final_score(args, final_score_str = final_msg, time_msg = time_msg)
         report.print_epoch_scores(epoch = best_epoch, scores = {k:v for k,v in stats_dict.items() if 'train' not in k})
-        print("8. Main Checkpoint")
 
     # write predictions
     if args.write_predictions:
         start_time = time.time()
 
         print("Writing preds for train...")
-        stats_dict = train_or_eval_epoch(args, device, sequential_train_dataloader, stats_dict, multi_gpu = multi_gpu, 
-                           model = model, 
-                           optimizer = None, 
-                           scheduler = None, 
+        stats_dict = train_or_eval_epoch(args, device, sequential_train_dataloader, stats_dict, multi_gpu = multi_gpu,
+                           model = model,
+                           optimizer = None,
+                           scheduler = None,
                            tokenizer = tokenizer,
                            sample_exps = args.do_explain,
                            split_name = 'train',
-                           write_predictions = True) 
+                           write_predictions = True)
 
         print("Writing preds for dev...")
-        stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu, 
-                           model = model, 
-                           optimizer = None, 
-                           scheduler = None, 
+        stats_dict = train_or_eval_epoch(args, device, dev_dataloader, stats_dict, multi_gpu = multi_gpu,
+                           model = model,
+                           optimizer = None,
+                           scheduler = None,
                            tokenizer = tokenizer,
                            sample_exps = args.do_explain,
                            split_name = 'dev',
-                           write_predictions = True) 
+                           write_predictions = True)
 
         print("Writing preds for test...")
-        stats_dict = train_or_eval_epoch(args, device, test_dataloader, stats_dict, multi_gpu = multi_gpu, 
-                           model = model, 
-                           optimizer = None, 
-                           scheduler = None, 
+        stats_dict = train_or_eval_epoch(args, device, test_dataloader, stats_dict, multi_gpu = multi_gpu,
+                           model = model,
+                           optimizer = None,
+                           scheduler = None,
                            tokenizer = tokenizer,
                            sample_exps = args.do_explain,
                            split_name = 'test',
-                           write_predictions = True) 
+                           write_predictions = True)
 
         end_time = time.time()
         writing_time = (end_time-start_time) / 60
@@ -945,7 +879,6 @@ if __name__ == "__main__":
         print(time_msg)
 
         report.print_epoch_scores(epoch = -1, scores = stats_dict)
-        print("9. Main Checkpoint")
 
     ### END OF SCRIPT ###
 
