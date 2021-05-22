@@ -124,5 +124,26 @@ This section describes how to run the LAS model on TPUs.
 
 4. Start the training:
    ```shell
-   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 4 -g 3 --save_dir save_dir --cache_dir cache_dir --server_number 1 --model t5-small --use_tpu
+   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir --cache_dir cache_dir --server_number 1 --model distilbert-base-cased --use_tpu
     ```
+   
+### Evaluating LAS Scores on TPU
+
+1. Go to the Google Cloud Console on your browser and visit the TPU section. Copy the IP address of the TPU instance.
+
+2. Execute the following in the TPU shell:
+   ```shell
+   export TPU_IP_ADDRESS=your-TPU-IP-address; \
+   export XRT_TPU_CONFIG="tpu_worker;0;$TPU_IP_ADDRESS:8470"
+    ```
+
+3. Move to the correct directory:
+   ```shell
+   cd LAS-NL-Explanations/sim_experiments/
+    ```
+
+4. Start the evaluation:
+   ```shell
+   python compute_sim.py --model_name sim.ST.RE --explanations_to_use explanation --split_name test --data circa_NLI --seed 21 --bootstrap --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --base_dir .
+    ```
+
