@@ -90,12 +90,12 @@ This section describes how to run the LAS model on TPUs.
    ```shell
     bash Miniconda3-latest-Linux-x86_64.sh
     ```
+   Now log out and log back in again.
    
 4. Create the Environment:
    ```shell
     conda create -n cdm python=3.7
     ```
-    Now log out and log back in again.
    
 5. Activate the Environment:
    ```shell
