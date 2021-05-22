@@ -892,18 +892,10 @@ if __name__ == "__main__":
         
         # print and write final stats2
         dev_acc, test_acc, dev_bleu, test_bleu = -1, -1, -1, -1
-        if data_name != 'QA' or args.labels_to_use != 'label': # CQA does not have test labels. so compute test on other datasets and CQA simulation
-            if args.do_task:
-                dev_acc = stats_dict['dev_acc']        
-                test_acc = stats_dict['test_acc']
-            if sample_exps:
-                dev_bleu = stats_dict['dev_bleu']
-                test_bleu = stats_dict['test_bleu']
-            final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Test acc: {test_acc:.2f} | Dev BLEU: {dev_bleu:.2f} | Test BLEU: {test_bleu:.2f}"
-        else:
-            if args.do_task: dev_acc = stats_dict['dev_acc']
-            if sample_exps: dev_bleu = stats_dict['dev_bleu']
-            final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Dev BLEU: {dev_bleu:.2f}"    
+        dev_acc = stats_dict['dev_acc'].detach().cpu().numpy()[0]
+        test_acc = stats_dict['test_acc'].detach().cpu().numpy()[0]
+        final_msg = f"Best epoch: {best_epoch} | Dev acc: {dev_acc:.2f} | Test acc: {test_acc:.2f}"
+
         if args.do_train:
             print("7. Main Checkpoint")
             report.write_final_score(args, final_score_str = final_msg, time_msg = time_msg)
