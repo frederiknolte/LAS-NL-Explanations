@@ -192,9 +192,10 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
     label_strs, sample_strs, multi_sample_strs = [], [], []
     preds_list = []
     label_probs_list = []
+    elapsed_time = 0
 
     for step, batch in enumerate(dataloader):
-        print(f"  {split_name.capitalize()} | Step {step+1} / {n_batches}", end = '\r')
+        print(f"  {split_name.capitalize()} | Step {step+1} / {n_batches} | Time previous epoch: {elapsed_time:1.0f} seconds", end = '\r')
 
         # unpack batch vars
         batch = [item.to(device) for item in batch]
@@ -433,7 +434,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 del batch, outputs
 
 
-        elapsed_time = (time.time() - start_time) / 60
+        elapsed_time = (time.time() - start_time)
         # print(f"Elapsed time: {elapsed_time:1.2f} minutes")
 
     # print examples
