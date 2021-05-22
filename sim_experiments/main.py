@@ -323,9 +323,8 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                         attention_mask = task_input_masks,
                         labels = task_choice_labels
                     )
-                    choice_losses = -outputs[1] # negative logits, preds gotten by argmin
-                    task_loss = outputs[0] / args.grad_accumulation_factor
-                    # print(task_loss)
+                    logits = outputs.logits
+                    task_loss = outputs.loss / args.grad_accumulation_factor
 
                 # print("5.1. Checkpoint")
                 # # compute task accuracy
