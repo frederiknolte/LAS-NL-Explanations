@@ -543,7 +543,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # model args
     parser.add_argument("--task_pretrained_name", default='t5-base', type=str, help='HuggingFace transformer model')
-    parser.add_argument("--max_seq_length", default=175, type=int, help="The maximum total input sequence length after WordPiece tokenization. \n"
+    parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after WordPiece tokenization. \n"
                                                                      "Sequences longer than this will be truncated, and sequences shorter \n"
                                                                      "than this will be padded.")
     # hyperparams
@@ -556,7 +556,7 @@ if __name__ == "__main__":
                                                                             "E.g., 0.1 = 10%% of training.")
     parser.add_argument('--max_grad_norm', type=int, default=1)
     parser.add_argument("--task_coef", default=1, type=float, help="Coefficient for task loss.")
-    parser.add_argument('--max_sample_len', type = int, default = 175, help = 'Maximum num tokens that can appear in generated explanation')
+    parser.add_argument('--max_sample_len', type = int, default = 360, help = 'Maximum num tokens that can appear in generated explanation')
     # gpu + distributed + half-precision training
     parser.add_argument('--gpu', type = int, default = None, help = 'gpu id to use. -1 corresponds to multi-gpu')
     parser.add_argument('--use_tpu', action='store_true', help='use tpu.')
