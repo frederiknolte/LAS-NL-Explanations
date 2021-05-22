@@ -234,7 +234,7 @@ def circa_QA_SIM_CLM_reason_MT(args):
     for seed in seed_variance_test:
         os.system(f"python main.py --task_pretrained_name t5-base --do_explain false --multi_explanation false --condition_on_explanations true "
                   f"--explanations_to_use explanation --labels_to_use prediction --max_seq_len 512 --max_sample_len 360 "
-                  f"--model_name sim.ST.RE --input_dropout .2 --explanation_dropout .4  --num_train_epochs 10 "
+                  f"--model_name sim.ST.RE --input_dropout .2 --explanation_dropout .4  --num_train_epochs {args.num_train_epochs} "
                   f"--data_dir data/circa/QA --seed {seed} "
                   f"{('--gpu '+str(args.gpu)+' ') if args.gpu is not None else ''}"
                   f"{('--use_tpu ' if args.use_tpu else '')}"
@@ -247,7 +247,7 @@ def circa_NLI_SIM_ST_reason(args):
     LR = 1e-4 if 't5' in args.model else 1e-5
     for seed in seed_variance_test:
         os.system(f"python main.py --task_pretrained_name {args.model} --do_explain false --multi_explanation false --condition_on_explanations "
-                  f"true --explanations_to_use explanation --labels_to_use prediction --num_train_epochs 10 --max_seq_len 512 --max_sample_len 360 "
+                  f"true --explanations_to_use explanation --labels_to_use prediction --num_train_epochs {args.num_train_epochs} --max_seq_len 512 --max_sample_len 360 "
                   f"--model_name sim.ST.RE  --input_dropout .2 --explanation_dropout .4 --lr {LR} "
                   f"--data_dir data/circa/NLI --seed {seed} "
                   f"{('--gpu '+str(args.gpu)+' ') if args.gpu is not None else ''}"
@@ -259,6 +259,7 @@ def circa_NLI_SIM_ST_reason(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpu", default=None, type=int, help='')
+    parser.add_argument("--num_train_epochs", default=1, type=int, help='number of training epochs.')
     parser.add_argument('--use_tpu', action='store_true', help='use tpu for training.')
     parser.add_argument("--experiment", '-e', type=str, help='')
     parser.add_argument("--server_number", '-s', required=True, type=str, help='')
