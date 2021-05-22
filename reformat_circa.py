@@ -25,8 +25,6 @@ def reformat_NLI(input_path, target_path, prediction_path, drop_none):
         data.append([hypothesis, premise, target, prediction, explanation])
 
     random.shuffle(data)
-    split_1 = int(len(data) * 0.6)
-    split_2 = int(len(data) * 0.8)
 
     data = pd.DataFrame(data, columns=  ['hypothesis',
                                          'premise',
@@ -36,6 +34,9 @@ def reformat_NLI(input_path, target_path, prediction_path, drop_none):
 
     if drop_none:
         data = data[data.target != 3]
+
+    split_1 = int(len(data) * 0.6)
+    split_2 = int(len(data) * 0.8)
 
 
     data.iloc[:split_1,:].to_csv('sim_experiments/data/circa/NLI/train.csv', sep=',', index=False)
