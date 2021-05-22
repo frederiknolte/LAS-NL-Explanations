@@ -83,7 +83,7 @@ This section describes how to run the LAS model on TPUs.
 
 2. Download the Miniconda installer:
    ```shell
-    wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
     ```
 
 3. Install Anaconda:
