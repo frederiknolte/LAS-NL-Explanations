@@ -105,6 +105,7 @@ This section describes how to run the LAS model on TPUs.
 6. Install the required packages:
    ```shell
     pip install -r LAS-NL-Explanations/requirements.txt
+    pip install cloud-tpu-client==0.10 https://storage.googleapis.com/tpu-pytorch/wheels/torch_xla-1.8.1-cp37-cp37m-linux_x86_64.whl
     ```
 
 ### Starting the Training on TPU
