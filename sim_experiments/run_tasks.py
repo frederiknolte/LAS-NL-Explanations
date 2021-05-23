@@ -242,11 +242,11 @@ def circa_QA_SIM_CLM_reason_MT(args):
     )
 
 
-def circa_NLI_SIM_ST_reason(args):
+def circa_NLI_SIM_ST_rationalize(args):
     LR = 1e-4 if 't5' in args.model else 1e-5
     os.system(f"python main.py --task_pretrained_name {args.model} --do_explain false --multi_explanation false --condition_on_explanations "
               f"true --explanations_to_use explanation --labels_to_use prediction --num_train_epochs {args.num_train_epochs} --max_seq_len 512 --max_sample_len 360 "
-              f"--model_name sim.ST.RE  --input_dropout .2 --explanation_dropout .4 --lr {LR} "
+              f"--model_name sim.ST.RA  --input_dropout .2 --explanation_dropout .4 --lr {LR} "
               f"--data_dir data/circa/NLI --seed {args.seed} "
               f"{('--gpu '+str(args.gpu)+' ') if args.gpu is not None else ''}"
               f"{('--use_tpu ' if args.use_tpu else '')}"
@@ -365,5 +365,5 @@ if __name__ == '__main__':
     if args.experiment == 'circa.QA.SIM.MT.RE':
         circa_QA_SIM_CLM_reason_MT(args)
 
-    if args.experiment == 'circa.NLI.SIM.ST.RE':
-        circa_NLI_SIM_ST_reason(args)
+    if args.experiment == 'circa.NLI.SIM.ST.RA':
+        circa_NLI_SIM_ST_rationalize(args)
