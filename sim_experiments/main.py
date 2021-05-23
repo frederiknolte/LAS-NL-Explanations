@@ -744,8 +744,8 @@ if __name__ == "__main__":
         stats_dict = {}
 
     # BEGIN TRAINING
-    best_epoch = torch.tensor([-1.0])
-    best_score = torch.tensor([-1.0])
+    best_epoch = -1.0
+    best_score = -1.0
     if args.do_train:
 
         # training loop
@@ -772,16 +772,17 @@ if __name__ == "__main__":
             score = stats_dict['dev_' + args.select_for]
 
             # check for best dev score and save if new best
-            # if score[0] > best_score[0]:
-            print(f"  New best model. Saving model in {args.save_dir}")
-            model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
-            state_dict = model_to_save.state_dict()
-            # torch.save(state_dict, model_path)
-            if xm.is_master_ordinal():
-                model.config.save_pretrained("save_dir/")
-            xm.save(state_dict, model_path)
-            best_score = score
-            best_epoch = e
+            if score[0] > best_score:
+                print("enter")
+                print(f"  New best model. Saving model in {args.save_dir}")
+                model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
+                state_dict = model_to_save.state_dict()
+                # torch.save(state_dict, model_path)
+                if xm.is_master_ordinal():
+                    model.config.save_pretrained("save_dir/")
+                xm.save(state_dict, model_path)
+                best_score = score[0]
+                best_epoch = e
 
             # write + print summary stats
             report.write_epoch_scores(epoch = e, scores = stats_dict)
