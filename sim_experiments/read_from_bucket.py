@@ -69,6 +69,35 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
         explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
         test_data.append([hypothesis, premise, target, prediction, explanation])
 
+    train_data = []
+    # READ TEST SET
+    train_prediction_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_eval_v100_nli_{rs}" \
+                             f"_{mu}" \
+                             f"{str(seed)}_{step}_predictions"
+    train_input_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_eval_v100_nli_{rs}" \
+                        f"_{mu}" \
+                        f"{str(seed)}_inputs"
+    train_target_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_eval_v100_nli_{rs}" \
+                         f"_{mu}" \
+                         f"{str(seed)}_targets"
+    train_prediction_blobs = list(bucket.list_blobs(prefix=train_prediction_prefix))
+    train_input_blobs = list(bucket.list_blobs(prefix=train_input_prefix))
+    train_target_blobs = list(bucket.list_blobs(prefix=train_target_prefix))
+    train_prediction = train_prediction_blobs[0].download_as_string()
+    train_input = train_input_blobs[0].download_as_string()
+    train_target = train_target_blobs[0].download_as_string()
+    train_prediction = train_prediction.decode('utf-8')
+    train_input = train_input.decode('utf-8')
+    train_target = train_target.decode('utf-8')
+
+    for line in zip(train_input.splitlines(), train_target.splitlines(), train_prediction.splitlines()):
+        hypothesis = line[0][26:-2].split(" premise: ")[0]
+        premise = line[0][26:-1].split(" premise: ")[1]
+        target = possible_labels[line[1][11:-22]]
+        prediction = possible_labels[line[2][11:].split("', 'explanations': [")[0]]
+        explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
+        train_data.append([hypothesis, premise, target, prediction, explanation])
+
     # random.seed(random_seed)
     # random.shuffle(data)
 
@@ -84,18 +113,24 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
                                        'prediction',
                                        'explanation'])
 
+    train_data = pd.DataFrame(train_data, columns=['hypothesis',
+                                                 'premise',
+                                                 'target',
+                                                 'prediction',
+                                                 'explanation'])
+
     if drop_none:
         validation_data = validation_data[validation_data.target != 3]
         test_data = test_data[test_data.target != 3]
-        # validation_data = validation_data[validation_data.target != 3]
+        train_data = train_data[train_data.target != 3]
 
     # split_1 = int(len(data) * 0.6)
     # split_2 = int(len(data) * 0.8)
 
     os.makedirs("data/circa/NLI/", exist_ok=True)
-    test_data.to_csv('data/circa/NLI/train.csv', sep=',', index=False)
+    train_data.to_csv('data/circa/NLI/train.csv', sep=',', index=False)
     validation_data.to_csv('data/circa/NLI/dev.csv', sep=',', index=False)
-    # data.iloc[split_2:, :].to_csv('data/circa/NLI/test.csv', sep=',', index=False)
+    test_data.to_csv('data/circa/NLI/test.csv', sep=',', index=False)
 
 
 if __name__ == "__main__":
