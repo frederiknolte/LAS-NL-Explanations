@@ -10,8 +10,8 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
 
     client = storage.Client()
     bucket = client.bucket(bucket_name)
-    data = []
 
+    validation_data = []
     # READ VALIDATION SET
     validation_prediction_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/validation_eval/circa_eval_v100_nli_{rs}" \
                                    f"_{mu}" \
@@ -38,8 +38,9 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
         target = possible_labels[line[1][11:-22]]
         prediction = possible_labels[line[2][11:].split("', 'explanations': [")[0]]
         explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
-        data.append([hypothesis, premise, target, prediction, explanation])
+        validation_data.append([hypothesis, premise, target, prediction, explanation])
 
+    test_data = []
     # READ TEST SET
     test_prediction_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/test_eval/circa_eval_v100_nli_{rs}" \
                              f"_{mu}" \
@@ -66,27 +67,35 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
         target = possible_labels[line[1][11:-22]]
         prediction = possible_labels[line[2][11:].split("', 'explanations': [")[0]]
         explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
-        data.append([hypothesis, premise, target, prediction, explanation])
+        test_data.append([hypothesis, premise, target, prediction, explanation])
 
-    random.seed(random_seed)
-    random.shuffle(data)
+    # random.seed(random_seed)
+    # random.shuffle(data)
 
-    data = pd.DataFrame(data, columns=['hypothesis',
+    validation_data = pd.DataFrame(validation_data, columns=['hypothesis',
+                                       'premise',
+                                       'target',
+                                       'prediction',
+                                       'explanation'])
+
+    test_data = pd.DataFrame(test_data, columns=['hypothesis',
                                        'premise',
                                        'target',
                                        'prediction',
                                        'explanation'])
 
     if drop_none:
-        data = data[data.target != 3]
+        validation_data = validation_data[validation_data.target != 3]
+        test_data = test_data[test_data.target != 3]
+        # validation_data = validation_data[validation_data.target != 3]
 
-    split_1 = int(len(data) * 0.6)
-    split_2 = int(len(data) * 0.8)
+    # split_1 = int(len(data) * 0.6)
+    # split_2 = int(len(data) * 0.8)
 
     os.makedirs("data/circa/NLI/", exist_ok=True)
-    data.iloc[:split_1, :].to_csv('data/circa/NLI/train.csv', sep=',', index=False)
-    data.iloc[split_1:split_2, :].to_csv('data/circa/NLI/dev.csv', sep=',', index=False)
-    data.iloc[split_2:, :].to_csv('data/circa/NLI/test.csv', sep=',', index=False)
+    test_data.to_csv('data/circa/NLI/train.csv', sep=',', index=False)
+    validation_data.to_csv('data/circa/NLI/dev.csv', sep=',', index=False)
+    # data.iloc[split_2:, :].to_csv('data/circa/NLI/test.csv', sep=',', index=False)
 
 
 if __name__ == "__main__":
