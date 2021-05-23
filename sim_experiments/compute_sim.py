@@ -188,7 +188,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_name", default ='', type=str, help='')   
     parser.add_argument("--explanations_to_use", default = 'ground_truth', type=str, help='')   
     parser.add_argument("--labels_to_use", default = 'label', type=str, help='')   
-    parser.add_argument("--seed", default = '42', type=str, help='')  
+    parser.add_argument("--seed", default = '21', type=str, help='')
     parser.add_argument('--leaking_param', default = 0, type=float, help='')
     parser.add_argument('--split_name', default='dev', type=str, help='see get_sim_metric')
     parser.add_argument('--task_pretrained_name', default='t5-base', type=str, help='')
