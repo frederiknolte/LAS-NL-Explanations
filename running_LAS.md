@@ -134,22 +134,17 @@ executed beforehand.
 
 4. Set the seed that has been used for obtaining the data (this is either `3`, `948`, or `2756`):
    ```shell
-   export GCLOUD_SEED=your-seed
+   export SEED=your-seed
     ```
 
-5. For obtaining new train/dev/test splits, we will be using the same seed:
-   ```shell
-   export RANDOM_SEED=21
-    ```
-
-6. Set the training step of which you want to use the data:
+5. Set the training step of which you want to use the data:
    ```shell
    export GCLOUD_STEP=your-best-training-step
     ```
 
-7. Execute the data fetching:
+6. Execute the data fetching:
    ```shell
-   python read_from_bucket.py --bucket_name $BUCKET_NAME --rs $RS --mu $MU --gcloud_seed $GCLOUD_SEED --gcloud_step $GCLOUD_STEP --random_seed $RANDOM_SEED
+   python read_from_bucket.py --bucket_name $BUCKET_NAME --rs $RS --mu $MU --gcloud_seed $SEED --gcloud_step $GCLOUD_STEP --random_seed $SEED
     ```
 
 ### Starting the Training on TPU
@@ -164,15 +159,14 @@ executed beforehand.
 
 3. Start the training:
    ```shell
-   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir/${RS}_${MU} --cache_dir cache_dir --model distilbert-base-cased 
-   --use_tpu
+   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir/${RS}_${MU} --cache_dir cache_dir --model distilbert-base-cased --seed $SEED --use_tpu
     ```
    
 ### Evaluating LAS Scores on TPU
 
 1. Start the evaluation:
    ```shell
-   python compute_sim.py --model_name sim.ST.RE --explanations_to_use explanation --split_name test --data circa_NLI --seed ${RANDOM_SEED} --bootstrap 
+   python compute_sim.py --model_name sim.ST.RE --explanations_to_use explanation --split_name dev --data circa_NLI --seed ${SEED} --bootstrap 
    --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --print_leakage --save_dir save_dir/${RS}_${MU}
     ```
 
