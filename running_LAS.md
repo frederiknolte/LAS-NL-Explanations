@@ -144,7 +144,7 @@ executed beforehand.
 
 6. Execute the data fetching:
    ```shell
-   python read_from_bucket.py --bucket_name $BUCKET_NAME --rs $RS --mu $MU --gcloud_seed $SEED --gcloud_step $GCLOUD_STEP --random_seed $SEED
+   python read_from_bucket.py --bucket_name $BUCKET_NAME --rs $RS --mu $MU --gcloud_seed $SEED --gcloud_step $GCLOUD_STEP --random_seed $SEED --drop_none
     ```
 
 ### Starting the Training on TPU
