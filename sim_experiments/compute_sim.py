@@ -26,8 +26,8 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         extension = 'csv'
         sep = ','
         folder = 'data/circa/QA'
-    save_dir = os.path.join(args.base_dir, 'save_dir')
-    cache_dir = os.path.join(args.base_dir, 'cache_dir')
+    save_dir = args.save_dir
+    cache_dir = args.cache_dir
     train_file = os.path.join(folder, 'train.%s' % extension)
     dev_file = os.path.join(folder, 'dev.%s' % extension)
     test_file = os.path.join(folder, 'test.%s' % extension)
@@ -80,7 +80,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
     test = pd.read_csv(test_file, sep=sep)
     to_use = dev if split_name == 'dev' else test
 
-    _ = compute_sim(args, to_use, labels_to_use, data, args.task_pretrained_name, model_name, seed, print_results = True)
+    _ = compute_sim(args, to_use, labels_to_use, data, args.task_pretrained_name, model_name, seed, save_dir, print_results = True)
 
     if args.print_leakage:
         print(f"Printing leakage to files...")
@@ -104,7 +104,8 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         for b in range(boot_times):
             boot_idx = np.random.choice(np.arange(len(to_use)), replace=True, size = len(to_use))    
             to_use_boot = to_use.iloc[boot_idx,:]  
-            mean, leaking_diff, nonleaking_diff = compute_sim(args, to_use_boot, labels_to_use, data, args.task_pretrained_name, model_name, seed, print_results = False)
+            mean, leaking_diff, nonleaking_diff = compute_sim(args, to_use_boot, labels_to_use, data, args.task_pretrained_name, model_name, seed,
+                                                              save_dir, print_results = False)
             overall_metric_list.append(mean)
             leaking_diff_list.append(leaking_diff)
             nonleaking_diff_list.append(nonleaking_diff)
@@ -125,7 +126,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         print("--------------------------\n")
 
 
-def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, seed, print_results = False):
+def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, seed, save_dir, print_results = False):
     labels = to_use[labels_to_use]
     xe_col = '%s_%s_%s_%s_seed%s_XE' % ('preds', data, pretrained_name, model_name, seed)
     e_col = '%s_%s_%s_%s_seed%s_E' % ('preds', data, pretrained_name, model_name, seed)
@@ -157,20 +158,26 @@ def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, 
     nonleaking_diff = np.mean(xe_correct_nonleaked) - np.mean(baseline_correct[nonleaked])
     leaking_diff = np.mean(xe_correct_leaked) - np.mean(baseline_correct[leaked])
     if print_results:
-        print("\n------------------------")
-        print("num (probably) leaked: %d" % num_leaked)
-        print("y|x,e : %.4f    baseline : %.4f     y|x,e=null: %.4f" % (np.mean(xe_correct_leaked), np.mean(baseline_correct[leaked]), np.mean(x_correct_leaked)))
-        print("diff: %.4f" % (leaking_diff))
-        print()
-        print("num (probably) nonleaked: %d" % num_non_leaked)
-        print("y|x,e : %.4f    baseline : %.4f     y|x,e=null: %.4f" % (np.mean(xe_correct_nonleaked), np.mean(baseline_correct[nonleaked]), np.mean(x_correct_nonleaked)))
-        print("diff: %.4f" % (nonleaking_diff))
-        print()
-        print("overall: ")
-        print("y|x : %.4f      y|e : %.4f" % (np.mean(x_correct), np.mean(e_correct)))
-        print("y|x,e: %.4f     baseline : %.4f" % (np.mean(xe_correct), np.mean(baseline_correct)))
-        print("\nunweighted mean: %.2f" % (unweighted_mean*100))
-        print("--------------------------")
+        results = f"\n------------------------ \n" \
+        f"num (probably) leaked: {num_leaked} \n"
+        f"y|x,e : {np.mean(xe_correct_leaked):1.4f}    baseline : {np.mean(baseline_correct[leaked]):1.4f}     y|x,e=null: " \
+        f"{np.mean(x_correct_leaked):1.4f} \n" \
+        f"diff: {leaking_diff:1.4f} \n" \
+        "\n" \
+        f"num (probably) nonleaked: {num_non_leaked} \n" \
+        f"y|x,e : {np.mean(xe_correct_nonleaked):1.4f}    baseline : {np.mean(baseline_correct[nonleaked]):1.4f}     y|x,e=null: " \
+        f"{np.mean(x_correct_nonleaked):1.4f} \n" \ 
+        f"diff: {nonleaking_diff:1.4f} \n" \
+        "\n" \
+        f"overall: \n"
+        f"y|x : {np.mean(x_correct):1.4f}      y|e : {np.mean(e_correct):1.4f} \n" \
+        f"y|x,e: {np.mean(xe_correct):1.4f}     baseline : {np.mean(baseline_correct):1.4f} \n" \
+        f"\nunweighted mean: {(unweighted_mean*100):1.2f} \n" \
+        f"--------------------------"
+        print(results)
+        file = open(os.path.join(save_dir, "LAS_scores.txt"), 'w')
+        file.write(results)
+        file.close()
     return unweighted_mean, leaking_diff, nonleaking_diff
 
 if __name__ == '__main__':
@@ -190,7 +197,10 @@ if __name__ == '__main__':
     parser.add_argument('--print_leakage', action='store_true', help='')
     parser.add_argument('--small_data', action='store_true', help='Flag for using just a few datapoints for debugging purposes')
     parser.add_argument('--overwrite', action='store_true', help='rewrite predictions')
-    parser.add_argument("--base_dir", default='', required=True, type=str, help="folders for saved_models and cached_models should be in this directory")
+    parser.add_argument("--model_suffix", default='', type=str, help="folders for saved_models and cached_models should be in this "
+                                                                              "directory")
+    parser.add_argument("--save_dir", required=True, type=str, help="folder with saved statedicts")
+    parser.add_argument("--cache_dir", default='cache_dir/', type=str, help="folder with cached models")
     args = parser.parse_args()
 
     if args.condition == "get_sim_metric":
