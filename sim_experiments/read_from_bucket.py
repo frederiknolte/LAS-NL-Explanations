@@ -6,6 +6,8 @@ from google.cloud import storage
 
 
 def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
+    print(f"Reading data...")
+
     possible_labels = {"neutral": 0, "entailment": 1, "contradiction": 2, "none": 3}
 
     client = storage.Client()
@@ -37,7 +39,11 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
         premise = line[0][26:-1].split(" premise: ")[1]
         target = possible_labels[line[1][11:-22]]
         prediction = possible_labels[line[2][11:].split("', 'explanations': [")[0]]
-        explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
+        if len(eval(line[2])["explanations"]) > 0:
+            explanation = eval(line[2])["explanations"][0]
+        else:
+            explanation = ''
+        # explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
         validation_data.append([hypothesis, premise, target, prediction, explanation])
 
     test_data = []
@@ -66,7 +72,11 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
         premise = line[0][26:-1].split(" premise: ")[1]
         target = possible_labels[line[1][11:-22]]
         prediction = possible_labels[line[2][11:].split("', 'explanations': [")[0]]
-        explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
+        if len(eval(line[2])["explanations"]) > 0:
+            explanation = eval(line[2])["explanations"][0]
+        else:
+            explanation = ''
+        # explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
         test_data.append([hypothesis, premise, target, prediction, explanation])
 
     train_data = []
@@ -95,7 +105,11 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
         premise = line[0][26:-1].split(" premise: ")[1]
         target = possible_labels[line[1][11:-22]]
         prediction = possible_labels[line[2][11:].split("', 'explanations': [")[0]]
-        explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
+        if len(eval(line[2])["explanations"]) > 0:
+            explanation = eval(line[2])["explanations"][0]
+        else:
+            explanation = ''
+        # explanation = line[2][11:].split("', 'explanations': [")[1][1:-3]
         train_data.append([hypothesis, premise, target, prediction, explanation])
 
     # random.seed(random_seed)
@@ -131,6 +145,11 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
     train_data.to_csv('data/circa/NLI/train.csv', sep=',', index=False)
     validation_data.to_csv('data/circa/NLI/dev.csv', sep=',', index=False)
     test_data.to_csv('data/circa/NLI/test.csv', sep=',', index=False)
+
+    print(f"Finished reading data!")
+    print(f"len(train): {len(train_data)}")
+    print(f"len(dev): {len(validation_data)}")
+    print(f"len(test): {len(test_data)}")
 
 
 if __name__ == "__main__":
