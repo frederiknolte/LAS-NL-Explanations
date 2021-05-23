@@ -173,6 +173,6 @@ executed beforehand.
 1. Start the evaluation:
    ```shell
    python compute_sim.py --model_name sim.ST.RE --explanations_to_use explanation --split_name test --data circa_NLI --seed ${RANDOM_SEED} --bootstrap 
-   --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --save_dir save_dir/${RS}_${MU}
+   --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --print_leakage --save_dir save_dir/${RS}_${MU}
     ```
 
