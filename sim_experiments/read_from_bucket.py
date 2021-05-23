@@ -71,13 +71,13 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
 
     train_data = []
     # READ TEST SET
-    train_prediction_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_eval_v100_nli_{rs}" \
+    train_prediction_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_v100_nli_{rs}" \
                              f"_{mu}" \
                              f"{str(seed)}_{step}_predictions"
-    train_input_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_eval_v100_nli_{rs}" \
+    train_input_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_v100_nli_{rs}" \
                         f"_{mu}" \
                         f"{str(seed)}_inputs"
-    train_target_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_eval_v100_nli_{rs}" \
+    train_target_prefix = f"esnli_and_cos_e_to_circa_nli_{rs}_{mu}{str(seed)}/train_eval/circa_v100_nli_{rs}" \
                          f"_{mu}" \
                          f"{str(seed)}_targets"
     train_prediction_blobs = list(bucket.list_blobs(prefix=train_prediction_prefix))
