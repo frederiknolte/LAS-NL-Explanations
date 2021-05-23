@@ -232,7 +232,7 @@ def NLI_SIM_ST_rationalize(args):
 
 def circa_QA_SIM_CLM_reason_MT(args):
     for seed in seed_variance_test:
-        os.system(f"python main.py --task_pretrained_name t5-base --do_explain false --multi_explanation false --condition_on_explanations true "
+        os.system(f"python main.py --task_pretrained_name {args.model} --do_explain false --multi_explanation false --condition_on_explanations true "
                   f"--explanations_to_use explanation --labels_to_use prediction --max_seq_len 512 --max_sample_len 360 "
                   f"--model_name sim.ST.RE --input_dropout .2 --explanation_dropout .4  --num_train_epochs {args.num_train_epochs} "
                   f"--data_dir data/circa/QA --seed {seed} "
