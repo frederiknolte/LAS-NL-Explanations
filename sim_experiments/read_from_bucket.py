@@ -135,11 +135,11 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
                                                  'explanation'])
 
     if drop_none:
-        validation_data = validation_data[validation_data.target != 3]
+        # validation_data = validation_data[validation_data.target != 3]
         validation_data = validation_data[validation_data.prediction != 3]
-        test_data = test_data[test_data.target != 3]
+        # test_data = test_data[test_data.target != 3]
         test_data = test_data[test_data.prediction != 3]
-        train_data = train_data[train_data.target != 3]
+        # train_data = train_data[train_data.target != 3]
         train_data = train_data[train_data.prediction != 3]
 
     # split_1 = int(len(data) * 0.6)
