@@ -1,11 +1,5 @@
 # Running the LAS Model
 
-## Preparing the Data
-Data preparation is handled by the ``reformat_circa.py`` file. First, you need to download the input, target and prediction file from the Google 
-Cloud Bucket, which can easily be done through the browser interface. After, moving the three files into this project directory, you call 
-``reformat_circa.py`` with specifying the location of the three files. The resulting train/dev/test splits will be saved in 
-``sim_experiments/data/circa/{QA/NLI}``.
-
 ## Running LAS on LISA
 This section describes how to run the LAS model on LISA. [Running experiments on TPUs](Running-LAS-on-TPU) is described in a later section.
 
@@ -32,6 +26,12 @@ This section describes how to run the LAS model on LISA. [Running experiments on
     ```
 
 Now log out of LISA and log back in again.
+
+### Preparing the Data
+Data preparation is handled by the ``reformat_circa.py`` file. First, you need to download the input, target and prediction file from the Google 
+Cloud Bucket, which can easily be done through the browser interface. After, moving the three files into this project directory, you call 
+``reformat_circa.py`` with specifying the location of the three files. The resulting train/dev/test splits will be saved in 
+``sim_experiments/data/circa/{QA/NLI}``.
 
 ### Training the Simulator
 
@@ -108,6 +108,50 @@ This section describes how to run the LAS model on TPUs.
     pip install cloud-tpu-client==0.10 https://storage.googleapis.com/tpu-pytorch/wheels/torch_xla-1.8.1-cp37-cp37m-linux_x86_64.whl
     ```
 
+7. Move to the correct directory:
+   ```shell
+   cd LAS-NL-Explanations/sim_experiments/
+    ```
+
+### Preparing the Data
+The following code directly fetches the data from your GCLoud bucket. Make sure that all evaluations on both the validation and test set have been 
+executed beforehand.
+
+1. Set the bucket name (without the `gs://` prefix):
+   ```shell
+   export BUCKET_NAME=your-bucket
+    ```
+
+2. Set matched vs unmatched:
+   ```shell
+   export MU={matched/unmatched}
+    ```
+
+3. Set relaxed vs strict:
+   ```shell
+   export RS={relaxed/strict}
+    ```
+
+4. Set the seed that has been used for obtaining the data (this is either `3`, `948`, or `2756`):
+   ```shell
+   export GCLOUD_SEED=your-seed
+    ```
+
+5. For obtaining new train/dev/test splits, we will be using the same seed:
+   ```shell
+   export RANDOM_SEED=21
+    ```
+
+6. Set the training step of which you want to use the data:
+   ```shell
+   export GCLOUD_STEP=your-best-training-step
+    ```
+
+7. Execute the data fetching:
+   ```shell
+   python read_from_bucket.py --bucket_name $BUCKET_NAME --rs $RS --mu $MU --gcloud_seed $GCLOUD_SEED --gcloud_step $GCLOUD_STEP --random_seed $RANDOM_SEED
+    ```
+
 ### Starting the Training on TPU
 
 1. Go to the Google Cloud Console on your browser and visit the TPU section. Copy the IP address of the TPU instance.
@@ -118,33 +162,17 @@ This section describes how to run the LAS model on TPUs.
    export XRT_TPU_CONFIG="tpu_worker;0;$TPU_IP_ADDRESS:8470"
     ```
 
-3. Move to the correct directory:
+3. Start the training:
    ```shell
-   cd LAS-NL-Explanations/sim_experiments/
-    ```
-
-4. Start the training:
-   ```shell
-   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir --cache_dir cache_dir --model distilbert-base-cased --use_tpu
+   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir/${RS}_${MU} --cache_dir cache_dir --model distilbert-base-cased 
+   --use_tpu
     ```
    
 ### Evaluating LAS Scores on TPU
 
-1. Go to the Google Cloud Console on your browser and visit the TPU section. Copy the IP address of the TPU instance.
-
-2. Execute the following in the TPU shell:
+1. Start the evaluation:
    ```shell
-   export TPU_IP_ADDRESS=your-TPU-IP-address; \
-   export XRT_TPU_CONFIG="tpu_worker;0;$TPU_IP_ADDRESS:8470"
-    ```
-
-3. Move to the correct directory:
-   ```shell
-   cd LAS-NL-Explanations/sim_experiments/
-    ```
-
-4. Start the evaluation:
-   ```shell
-   python compute_sim.py --model_name sim.ST.RE --explanations_to_use explanation --split_name test --data circa_NLI --seed 21 --bootstrap --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --base_dir .
+   python compute_sim.py --model_name sim.ST.RE --explanations_to_use explanation --split_name test --data circa_NLI --seed ${RANDOM_SEED} --bootstrap 
+   --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --save_dir save_dir/${RS}_${MU}
     ```
 
