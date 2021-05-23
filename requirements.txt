@@ -3,3 +3,4 @@ pandas
 sacrebleu
 transformers
 tensorflow
+google-cloud-storage
