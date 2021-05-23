@@ -166,7 +166,7 @@ def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, 
         "\n" \
         f"num (probably) nonleaked: {num_non_leaked} \n" \
         f"y|x,e : {np.mean(xe_correct_nonleaked):1.4f}    baseline : {np.mean(baseline_correct[nonleaked]):1.4f}     y|x,e=null: " \
-        f"{np.mean(x_correct_nonleaked):1.4f} \n" \ 
+        f"{np.mean(x_correct_nonleaked):1.4f} \n" \
         f"diff: {nonleaking_diff:1.4f} \n" \
         "\n" \
         f"overall: \n" \
