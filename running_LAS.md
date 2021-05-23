@@ -159,7 +159,7 @@ executed beforehand.
 
 3. Start the training:
    ```shell
-   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir/${RS}_${MU}_${SEED} --cache_dir cache_dir --model distilbert-base-cased --seed $SEED --use_tpu
+   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir/${RS}_${MU}_${SEED} --cache_dir cache_dir --model distilbert-base-cased --seed $SEED --use_tpu --num_train_epochs 3
     ```
    
 ### Evaluating LAS Scores on TPU
