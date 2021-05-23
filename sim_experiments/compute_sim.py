@@ -86,8 +86,8 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
         print(f"Printing leakage to files...")
         file_names = [train_file, dev_file, test_file]
         for i, set in enumerate([train, dev, test]):
-            labels = to_use[labels_to_use]
-            e = to_use[e_col]
+            labels = set[labels_to_use]
+            e = set[e_col]
             e_correct = np.array(1 * (labels == e), dtype=object)
             e_correct[e_correct == 1] = "Yes"
             e_correct[e_correct == 0] = "No"
