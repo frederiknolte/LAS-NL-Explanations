@@ -82,6 +82,18 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
 
     _ = compute_sim(args, to_use, labels_to_use, data, args.task_pretrained_name, model_name, seed, print_results = True)
 
+    if args.print_leakage:
+        print(f"Printing leakage to files...")
+        file_names = [train_file, dev_file, test_file]
+        for i, set in enumerate([train, dev, test]):
+            labels = to_use[labels_to_use]
+            e = to_use[e_col]
+            e_correct = np.array(1 * (labels == e), dtype=object)
+            e_correct[e_correct == 1] = "Yes"
+            e_correct[e_correct == 0] = "No"
+            set['leaked'] = e_correct
+            set.to_csv(file_names[i], sep=sep)
+
     if args.bootstrap:
         start = time.time()
         boot_times = 10000
@@ -111,8 +123,6 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
 
         print("time for bootstrap: %.1f minutes" % ((time.time() - start)/60))
         print("--------------------------\n")
-
- 
 
 
 def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, seed, print_results = False):
@@ -177,6 +187,7 @@ if __name__ == '__main__':
     parser.add_argument('--task_pretrained_name', default='t5-base', type=str, help='')
     parser.add_argument('--bootstrap', action='store_true', help='')
     parser.add_argument('--use_tpu', action='store_true', help='')
+    parser.add_argument('--print_leakage', action='store_true', help='')
     parser.add_argument('--small_data', action='store_true', help='Flag for using just a few datapoints for debugging purposes')
     parser.add_argument('--overwrite', action='store_true', help='rewrite predictions')
     parser.add_argument("--base_dir", default='', required=True, type=str, help="folders for saved_models and cached_models should be in this directory")
