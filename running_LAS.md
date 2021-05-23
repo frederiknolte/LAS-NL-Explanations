@@ -159,7 +159,8 @@ executed beforehand.
 
 3. Start the training:
    ```shell
-   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir/${RS}_${MU} --cache_dir cache_dir --model distilbert-base-cased --seed $SEED --use_tpu
+   python run_tasks.py -e circa.NLI.SIM.ST.RE -b 64 -g 1 --save_dir save_dir/${RS}_${MU}_${SEED} --cache_dir cache_dir --model distilbert-base-cased 
+   --seed $SEED --use_tpu
     ```
    
 ### Evaluating LAS Scores on TPU
@@ -167,6 +168,6 @@ executed beforehand.
 1. Start the evaluation:
    ```shell
    python compute_sim.py --model_name sim.ST.RE --explanations_to_use explanation --split_name dev --data circa_NLI --seed ${SEED} --bootstrap 
-   --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --print_leakage --save_dir save_dir/${RS}_${MU}
+   --labels_to_use prediction --use_tpu --task_pretrained_name distilbert-base-cased --print_leakage --save_dir save_dir/${RS}_${MU}_${SEED}
     ```
 
