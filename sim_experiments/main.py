@@ -579,7 +579,7 @@ if __name__ == "__main__":
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument('--data_dir', type=str, default='data/e-SNLI-data/',
                         help="The input data dir. Should contain the .csv files (or other data files) for the task.")
-    parser.add_argument("--report_dir", default='training_reports/', type=str,
+    parser.add_argument("--report_dir", default=None, type=str,
                     help="The output directory where the model training reports will be written.")
     parser.add_argument("--cache_dir", default='', required=True, type=str,
                     help="Directory for cacheing pretrained models.")
@@ -661,6 +661,10 @@ if __name__ == "__main__":
         args.max_seq_length = 128 # override to have lower max_seq_len
         args.max_sample_len = 128 # doesn't need to be higher than max_seq_length, naturally
         print("Overriding sequence length to %d and sample_len to %d" % (args.max_seq_length, args.max_sample_len))
+
+    # report dir
+    if args.report_dir is None:
+        args.report_dir = args.save_dir
 
     # make paths and dirs
     if data_name == 'QA':
