@@ -159,7 +159,7 @@ def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, 
     leaking_diff = np.mean(xe_correct_leaked) - np.mean(baseline_correct[leaked])
     if print_results:
         results = f"\n------------------------ \n" \
-        f"num (probably) leaked: {num_leaked} \n"
+        f"num (probably) leaked: {num_leaked} \n" \
         f"y|x,e : {np.mean(xe_correct_leaked):1.4f}    baseline : {np.mean(baseline_correct[leaked]):1.4f}     y|x,e=null: " \
         f"{np.mean(x_correct_leaked):1.4f} \n" \
         f"diff: {leaking_diff:1.4f} \n" \
@@ -169,7 +169,7 @@ def compute_sim(args, to_use, labels_to_use, data, pretrained_name, model_name, 
         f"{np.mean(x_correct_nonleaked):1.4f} \n" \ 
         f"diff: {nonleaking_diff:1.4f} \n" \
         "\n" \
-        f"overall: \n"
+        f"overall: \n" \
         f"y|x : {np.mean(x_correct):1.4f}      y|e : {np.mean(e_correct):1.4f} \n" \
         f"y|x,e: {np.mean(xe_correct):1.4f}     baseline : {np.mean(baseline_correct):1.4f} \n" \
         f"\nunweighted mean: {(unweighted_mean*100):1.2f} \n" \
