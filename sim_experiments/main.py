@@ -493,10 +493,9 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
 
         if args.do_task:
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
-            df = pd.read_csv(df_path, sep=delimiter)
+            df = pd.read_csv(df_path, sep=delimiter, quoting=csv.QUOTE_NONE, escapechar='\\')
             n = len(df)
             new_col_name = f'preds_{save_name}' if args.preds_suffix is None else f'preds_{save_name}_{args.preds_suffix}'
-            print(f"type(preds_list): {type(preds_list)}")
             while len(preds_list) < n:
                 preds_list.append('N/A')
             df[new_col_name] = preds_list
@@ -505,11 +504,11 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                 while len(label_probs_list) < n:
                     label_probs_list.append('N/A')
                 df[new_col_name] = label_probs_list
-            df.to_csv(df_path, index = False, sep = delimiter)
+            df.to_csv(df_path, index = False, sep = delimiter, quoting=csv.QUOTE_NONE, escapechar='\\')
 
         if args.do_explain:
             df_path = os.path.join(args.data_dir, f'{split_name}.{extension}')
-            df = pd.read_csv(df_path,sep=delimiter)
+            df = pd.read_csv(df_path,sep=delimiter, quoting=csv.QUOTE_NONE, escapechar='\\')
             n = len(df)
 
             if args.multi_explanation and args.do_task:
@@ -537,7 +536,7 @@ def train_or_eval_epoch(args, device, dataloader, stats_dict, multi_gpu,
                     sample_strs.append('N/A')
                 df[col_name] = sample_strs
 
-            df.to_csv(df_path, index = False, sep=delimiter)
+            df.to_csv(df_path, index = False, sep=delimiter, quoting=csv.QUOTE_NONE, escapechar='\\')
 
     return stats_dict
 
@@ -779,7 +778,6 @@ if __name__ == "__main__":
 
             # check for best dev score and save if new best
             if score[0] > best_score:
-                print("enter")
                 print(f"  New best model. Saving model in {args.save_dir}")
                 model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
                 state_dict = model_to_save.state_dict()

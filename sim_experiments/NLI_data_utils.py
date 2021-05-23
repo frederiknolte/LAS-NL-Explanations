@@ -113,7 +113,7 @@ def read_NLI_circa(args, input_file, explanations_to_use, version,
 
     label_map = {0: "neutral", 1: "entailment", 2: "contradiction", 3: "none"}
     exp_cols = ['explanation']
-    df = pd.read_csv(input_file, delimiter = ',')
+    df = pd.read_csv(input_file, delimiter = ',', quoting=csv.QUOTE_NONE, escapechar='\\')
     n = len(df) if not args.small_data else args.small_size
     # simulate_rationalized is used to pull out the predicted explanation when simulating a ST-Ra model
     simulate_rationalized = (args.condition_on_explanations and not args.multi_explanation and 'st.ra' in (labels_to_use.lower() if isinstance(labels_to_use, str) else '' ))

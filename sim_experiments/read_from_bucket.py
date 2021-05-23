@@ -1,3 +1,4 @@
+import csv
 import random
 import argparse
 import pandas as pd
@@ -135,16 +136,19 @@ def read_bucket_files(bucket_name, rs, mu, seed, step, drop_none, random_seed):
 
     if drop_none:
         validation_data = validation_data[validation_data.target != 3]
+        validation_data = validation_data[validation_data.prediction != 3]
         test_data = test_data[test_data.target != 3]
+        test_data = test_data[test_data.prediction != 3]
         train_data = train_data[train_data.target != 3]
+        train_data = train_data[train_data.prediction != 3]
 
     # split_1 = int(len(data) * 0.6)
     # split_2 = int(len(data) * 0.8)
 
     os.makedirs("data/circa/NLI/", exist_ok=True)
-    train_data.to_csv('data/circa/NLI/train.csv', sep=',', index=False)
-    validation_data.to_csv('data/circa/NLI/dev.csv', sep=',', index=False)
-    test_data.to_csv('data/circa/NLI/test.csv', sep=',', index=False)
+    train_data.to_csv('data/circa/NLI/train.csv', sep=',', index=False, quoting=csv.QUOTE_NONE, escapechar='\\')
+    validation_data.to_csv('data/circa/NLI/dev.csv', sep=',', index=False, quoting=csv.QUOTE_NONE, escapechar='\\')
+    test_data.to_csv('data/circa/NLI/test.csv', sep=',', index=False, quoting=csv.QUOTE_NONE, escapechar='\\')
 
     print(f"Finished reading data!")
     print(f"len(train): {len(train_data)}")

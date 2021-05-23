@@ -4,6 +4,7 @@ import time
 import os 
 import argparse
 from utils import str2bool
+import csv
 
 
 def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use, seed, split_name):
@@ -36,9 +37,9 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
     e_col = '%s_%s_%s_%s_seed%s_E' % (write_base, data, args.task_pretrained_name, model_name, seed)
     x_col = '%s_%s_%s_%s_seed%s_X' % (write_base, data, args.task_pretrained_name, model_name, seed)
 
-    train = pd.read_csv(train_file, sep=sep)
-    dev = pd.read_csv(dev_file, sep=sep)
-    test = pd.read_csv(test_file, sep=sep)
+    train = pd.read_csv(train_file, sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
+    dev = pd.read_csv(dev_file, sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
+    test = pd.read_csv(test_file, sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
     to_use = dev if split_name == 'dev' else test
     script = 'main'
     if args.small_data:
@@ -75,9 +76,9 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
                   f"--labels_to_use {labels_to_use} --do_train false --do_eval false --write_predictions --preds_suffix E "
                   f"--save_dir {save_dir} --cache_dir {cache_dir} --seed {seed} {small_data_add}"
           )
-    train = pd.read_csv(train_file, sep=sep)
-    dev = pd.read_csv(dev_file, sep=sep)
-    test = pd.read_csv(test_file, sep=sep)
+    train = pd.read_csv(train_file, sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
+    dev = pd.read_csv(dev_file, sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
+    test = pd.read_csv(test_file, sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
     to_use = dev if split_name == 'dev' else test
 
     _ = compute_sim(args, to_use, labels_to_use, data, args.task_pretrained_name, model_name, seed, save_dir, print_results = True)
@@ -92,7 +93,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
             e_correct[e_correct == 1] = "Yes"
             e_correct[e_correct == 0] = "No"
             set['leaked'] = e_correct
-            set.to_csv(file_names[i], sep=sep)
+            set.to_csv(file_names[i], sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
 
     if args.bootstrap:
         start = time.time()
