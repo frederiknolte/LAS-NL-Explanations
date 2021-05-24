@@ -93,7 +93,7 @@ def run_analysis(args, gpu, data, model_name, explanations_to_use, labels_to_use
             e_correct[e_correct == 1] = "Yes"
             e_correct[e_correct == 0] = "No"
             set['leaked'] = e_correct
-            set.to_csv(file_names[i], sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
+            set.to_csv(file_names[i], index=False, sep=sep, quoting=csv.QUOTE_NONE, escapechar='\\')
 
     if args.bootstrap:
         start = time.time()
